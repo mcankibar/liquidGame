@@ -166,6 +166,7 @@ export class MixingBench {
     v.home.set(0, 1.6, referenceZ());
     v.scale = cfg.goalShelf.glassScalePortrait;
     v.group.scale.setScalar(v.scale);
+    v.group.rotation.x = cfg.goalShelf.tilt * DEG;
     v.shadow.visible = false;
     // Its own, dimmer glass: the shared one's bright reflection streaks hide the goal colour.
     v.ownGlass = createGlassMaterial(THREE.FrontSide);
@@ -261,8 +262,8 @@ export class MixingBench {
     const g = v.glow;
     const pulse = 0.5 + 0.5 * Math.sin(this.time * 2.4);
     const k = cfg.goalShelf.glow;
-    // Lean the glass and its shelf towards the player so the liquid inside shows. The liquid's clip
-    // plane stays level in world space, so the surface stays flat as the glass leans.
+    // Lean the glass and its shelf towards the player so the liquid inside shows; its surface leans
+    // along with it (see updateLiquid).
     v.group.rotation.x = cfg.goalShelf.tilt * DEG;
     g.pool.material.opacity = (0.4 + pulse * 0.2) * k;
     g.ring.material.opacity = (0.6 + pulse * 0.4) * k;
@@ -860,6 +861,14 @@ export class MixingBench {
     const py = c * k + origin.y;
     const n = this.tmp2.set(v.wobble.x, 1, v.wobble.z).normalize();
     u.uPlane.value.set(n.x, n.y, n.z, px * n.x + py * n.y + pz * n.z);
+    if (v === this.reference) {
+      // The goal sample is a display piece: its surface leans with the glass (parallel to the rim)
+      // instead of staying level, so the tilted glass shows a neat disc of colour.
+      const t = v.group.rotation.x;
+      n.set(0, Math.cos(t), Math.sin(t));
+      const d = c * k;
+      u.uPlane.value.set(n.x, n.y, n.z, origin.x * n.x + (origin.y + n.y * d) * n.y + (origin.z + n.z * d) * n.z);
+    }
     u.uLocal.value.copy(v.group.matrixWorld).invert();
     u.uAxis.value.set(origin.x, origin.z);
     v.level = py - origin.y;
