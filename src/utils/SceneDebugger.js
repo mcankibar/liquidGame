@@ -32,7 +32,8 @@ function _injectCSS() {
       position: fixed;
       top: 0; right: 0;
       width: 300px;
-      height: 100vh;
+      max-width: 85vw;
+      max-height: 100vh;
       display: flex;
       flex-direction: row;
       overflow: hidden;
@@ -51,7 +52,8 @@ function _injectCSS() {
     .sd-inner {
       flex: 1 1 0;
       min-height: 0;        /* critical: lets flex child shrink & scroll */
-      height: 100%;
+      /* Only as tall as its content: the empty strip below must not swallow taps meant for the game. */
+      max-height: 100vh;
       overflow-y: auto;
       overflow-x: hidden;
       background: rgba(18, 18, 22, 0.82);
@@ -92,7 +94,11 @@ export class SceneDebugger {
     components,
     gltfLoaderComponent,
     getActiveCamera,
-    onCameraSwitch
+    onCameraSwitch,
+    gameConfig,
+    gameConfigRanges,
+    gameConfigLabels,
+    onGameConfigChange
   }) {
     this._scene = scene;
     this._renderer = renderer;
@@ -102,6 +108,10 @@ export class SceneDebugger {
     this._gltfLoader = gltfLoaderComponent ?? null;
     this._getActiveCamera = getActiveCamera;
     this._onCameraSwitch = onCameraSwitch;
+    this._gameConfig = gameConfig ?? null;
+    this._gameConfigRanges = gameConfigRanges ?? {};
+    this._gameConfigLabels = gameConfigLabels ?? {};
+    this._onGameConfigChange = onGameConfigChange ?? null;
 
     this._visible = true;
     this._selectedObject = null;
@@ -142,7 +152,8 @@ export class SceneDebugger {
   // ─── Initialisation ──────────────────────────────────────────────────────
 
   _initPane() {
-    this._pane = new Pane({ title: "⚙  Scene Debugger", expanded: true });
+    // Collapsed on phone-sized screens so the panel does not cover the game.
+    this._pane = new Pane({ title: "⚙  Scene Debugger", expanded: window.innerWidth >= 700 });
 
     // Outer wrapper (handles resize, no scrolling)
     const originalWrap = this._pane.element.parentElement;
@@ -180,6 +191,7 @@ export class SceneDebugger {
     hint.textContent = "O  toggle  |  W translate  |  E rotate  |  R scale";
     this._inner.insertBefore(hint, this._pane.element);
 
+    this._buildGameConfigFolder();
     this._buildSceneFolder();
     this._buildCameraFolder();
     this._buildLightsFolder();
@@ -241,6 +253,55 @@ export class SceneDebugger {
       if (e.key === "e") this._setTransformMode("rotate");
       if (e.key === "r") this._setTransformMode("scale");
     });
+  }
+
+  // ─── Game Config Folder ──────────────────────────────────────────────────
+
+  /**
+   * One sub-folder per entry of gameConfig.components. Numbers become sliders when a range is
+   * listed in gameConfigRanges (key "component.path.to.value"), keys named "color" get a colour
+   * picker, booleans a checkbox. Edits change the object in place and report the changed path.
+   */
+  _buildGameConfigFolder() {
+    if (!this._gameConfig) return;
+    const labels = this._gameConfigLabels;
+    const ranges = this._gameConfigRanges;
+    const root = this._pane.addFolder({ title: "🎮  Oyun Ayarları", expanded: true });
+    const changed = (path) => this._onGameConfigChange?.(path);
+    const isVector = (value) =>
+      value && typeof value === "object" && ["x", "y", "z"].every((k) => typeof value[k] === "number");
+    const isColor = (key, value) => typeof value === "number" && (key === "color" || key.endsWith("Color"));
+
+    const addValues = (folder, obj, path) => {
+      Object.entries(obj).forEach(([key, value]) => {
+        const full = `${path}.${key}`;
+        const label = labels[full] ?? key;
+        if (isVector(value)) {
+          // One x / y / z field with the numbers visible, instead of three nested sliders.
+          folder.addBinding(obj, key, { label, ...(ranges[full] ?? {}) }).on("change", () => changed(full));
+          return;
+        }
+        if (value && typeof value === "object") {
+          addValues(folder.addFolder({ title: label, expanded: false }), value, full);
+          return;
+        }
+        if (typeof value !== "number" && typeof value !== "boolean") return;
+        const options = { label };
+        if (isColor(key, value)) options.view = "color";
+        else Object.assign(options, ranges[full]);
+        folder.addBinding(obj, key, options).on("change", () => changed(full));
+      });
+    };
+    Object.entries(this._gameConfig.components).forEach(([name, values]) => {
+      addValues(root.addFolder({ title: labels[name] ?? name, expanded: false }), values, name);
+    });
+    root.addButton({ title: "📋 Ayarları kopyala" }).on("click", () => this._copyGameConfig());
+  }
+
+  _copyGameConfig() {
+    const text = `export const defaultGameConfig = ${JSON.stringify(this._gameConfig, null, 2)};\n`;
+    console.log(text);
+    navigator.clipboard?.writeText(text).catch(() => {});
   }
 
   // ─── Scene Folder ────────────────────────────────────────────────────────
