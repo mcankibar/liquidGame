@@ -50,7 +50,10 @@ function oakTexture() {
       ctx.lineWidth = 0.6 + rand() * 2.2;
       ctx.beginPath();
       ctx.moveTo(0, y);
-      for (let x = 0; x <= 1024; x += 64) ctx.lineTo(x, y + Math.sin(x * 0.01 + i) * (2 + rand() * 3));
+      // Whole sine periods across the width so the planks join seamlessly where the texture repeats.
+      const amp = 2 + rand() * 3;
+      const k = (Math.PI * 2 * (1 + Math.floor(rand() * 3))) / 1024;
+      for (let x = 0; x <= 1024; x += 32) ctx.lineTo(x, y + Math.sin(x * k + i) * amp);
       ctx.stroke();
     }
     if (rand() < 0.7) {
@@ -58,9 +61,11 @@ function oakTexture() {
       const ky = p * ph + ph * (0.3 + rand() * 0.4);
       for (let r = 18; r > 2; r -= 3) {
         ctx.strokeStyle = `rgba(45,25,12,${0.25})`;
-        ctx.beginPath();
-        ctx.ellipse(kx, ky, r * 2.2, r * 0.8, 0, 0, Math.PI * 2);
-        ctx.stroke();
+        for (const dx of [-1024, 0, 1024]) {
+          ctx.beginPath();
+          ctx.ellipse(kx + dx, ky, r * 2.2, r * 0.8, 0, 0, Math.PI * 2);
+          ctx.stroke();
+        }
       }
     }
     ctx.fillStyle = "rgba(20,10,4,0.75)";
@@ -69,36 +74,51 @@ function oakTexture() {
   return toTexture(canvas, [4.8, 1]);
 }
 
+// Seamless: fixed row heights that divide the canvas, and every brick and speck that crosses an edge
+// is drawn again on the other side, so the repeated tiles join without a visible line.
 function stoneTexture() {
-  const [canvas, ctx] = canvas2d(1024, 1024);
+  const W = 2048;
+  const H = 1024;
+  const [canvas, ctx] = canvas2d(W, H);
   const rand = rng(5);
   ctx.fillStyle = "#1f1a16";
-  ctx.fillRect(0, 0, 1024, 1024);
-  let y = 0;
-  while (y < 1024) {
-    const h = 70 + rand() * 50;
-    let x = -rand() * 120;
-    while (x < 1024) {
-      const w = 110 + rand() * 120;
+  ctx.fillRect(0, 0, W, H);
+  const rows = 11;
+  const rowH = H / rows;
+  const wrapped = (draw) => {
+    for (const dx of [-W, 0, W]) for (const dy of [-H, 0, H]) draw(dx, dy);
+  };
+  for (let row = 0; row < rows; row++) {
+    const y = row * rowH;
+    const start = rand() * 200;
+    let x = start;
+    while (x < start + W) {
+      // The last brick of the row closes the gap back to the first one exactly.
+      let w = 110 + rand() * 120;
+      if (start + W - (x + w) < 90) w = start + W - x;
       const tone = 70 + rand() * 38;
-      const g = ctx.createLinearGradient(x, y, x + w, y + h);
-      g.addColorStop(0, `rgb(${tone + 12},${tone + 6},${tone})`);
-      g.addColorStop(1, `rgb(${tone - 16},${tone - 20},${tone - 24})`);
-      ctx.fillStyle = g;
-      ctx.beginPath();
-      const inset = 5;
-      const r = 14;
-      ctx.roundRect(x + inset, y + inset, w - inset * 2, h - inset * 2, r);
-      ctx.fill();
+      const bx = x;
+      wrapped((dx, dy) => {
+        const g = ctx.createLinearGradient(bx + dx, y + dy, bx + dx + w, y + dy + rowH);
+        g.addColorStop(0, `rgb(${tone + 12},${tone + 6},${tone})`);
+        g.addColorStop(1, `rgb(${tone - 16},${tone - 20},${tone - 24})`);
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.roundRect(bx + dx + 5, y + dy + 5, w - 10, rowH - 10, 14);
+        ctx.fill();
+      });
       for (let i = 0; i < 40; i++) {
+        const sx = bx + rand() * w;
+        const sy = y + rand() * rowH;
+        const sw = 2 + rand() * 8;
+        const sh = 2 + rand() * 5;
         ctx.fillStyle = `rgba(${rand() < 0.5 ? "0,0,0" : "255,240,220"},${0.04 + rand() * 0.06})`;
-        ctx.fillRect(x + rand() * w, y + rand() * h, 2 + rand() * 8, 2 + rand() * 5);
+        wrapped((dx, dy) => ctx.fillRect(sx + dx, sy + dy, sw, sh));
       }
       x += w;
     }
-    y += h;
   }
-  return toTexture(canvas, [12, 4]);
+  return toTexture(canvas, [6, 4]);
 }
 
 const SYMBOLS = ["☉", "☽", "☿", "♀", "♂", "♃", "♄", "△", "▽", "♁", "✶", "☼"];
@@ -250,12 +270,22 @@ export function createWorkshop() {
 
   // Lambert, no bump: the wall and bench cover most of the screen, so they must shade cheaply.
   // Both run far past the play area so wide landscape screens never see the empty background.
-  const oak = new THREE.MeshLambertMaterial({ map: oakTexture() });
-  const depth = 7.7;
+  // The bench also runs far towards the player, so its front edge stays below the screen even when
+  // a wide landscape camera looks down from far away (it showed as a dark strip at the bottom).
+  const depth = 24;
+  const oakTop = oakTexture();
+  oakTop.repeat.set(4.8, depth / 7.7); // keep the plank width the 7.7-deep bench had
+  const oak = new THREE.MeshLambertMaterial({ map: oakTop });
   const front = BENCH_BACK + depth;
   const top = new THREE.Mesh(new THREE.BoxGeometry(48, 0.24, depth), oak);
   top.position.set(0, -0.12, BENCH_BACK + depth / 2);
-  const apron = new THREE.Mesh(new THREE.BoxGeometry(48, 10, 0.1), new THREE.MeshBasicMaterial({ color: 0x1c1008 }));
+  // The bench's front board: wood in shade rather than black, should any view reach it.
+  const apronTexture = oakTexture();
+  apronTexture.repeat.set(4.8, 1.3);
+  const apron = new THREE.Mesh(
+    new THREE.BoxGeometry(48, 10, 0.1),
+    new THREE.MeshLambertMaterial({ map: apronTexture, color: 0x9a8676 })
+  );
   apron.position.set(0, -5.1, front - 0.1);
 
   const wall = new THREE.Mesh(
