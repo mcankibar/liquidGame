@@ -359,21 +359,19 @@ export class MixingBench {
     this.stageOut();
     this.offstage = false;
     return new Promise((resolve) => {
-      const slide = (v, delay) => gsap.to(v.group.position, { x: v.home.x, duration: 0.75, ease: "power3.out", delay });
-      slide(this.target, 0);
-      this.sources.forEach((v, i) => slide(v, 0.12 + i * 0.08));
-      this.hooks.onSlide?.();
-      gsap.to(this.reference, {
-        drop: 0,
-        duration: 0.85,
-        ease: "bounce.out",
-        delay: 0.55 + this.sources.length * 0.08,
+      // One timeline: the goal drops onto its shelf while the glasses slide in, not after them.
+      const tl = gsap.timeline({
         onComplete: () => {
           this.transitioning = false;
           this.locked = false;
           resolve();
         }
       });
+      const slide = (v, at) => tl.to(v.group.position, { x: v.home.x, duration: 0.75, ease: "power3.out" }, at);
+      slide(this.target, 0);
+      this.sources.forEach((v, i) => slide(v, 0.08 + i * 0.06));
+      tl.to(this.reference, { drop: 0, duration: 0.8, ease: "bounce.out" }, 0.05);
+      this.hooks.onSlide?.();
     });
   }
 
