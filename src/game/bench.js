@@ -261,6 +261,9 @@ export class MixingBench {
     const g = v.glow;
     const pulse = 0.5 + 0.5 * Math.sin(this.time * 2.4);
     const k = cfg.goalShelf.glow;
+    // Lean the glass and its shelf towards the player so the liquid inside shows. The liquid's clip
+    // plane stays level in world space, so the surface stays flat as the glass leans.
+    v.group.rotation.x = cfg.goalShelf.tilt * DEG;
     g.pool.material.opacity = (0.4 + pulse * 0.2) * k;
     g.ring.material.opacity = (0.6 + pulse * 0.4) * k;
     g.rim.material.uniforms.uStrength.value = (0.7 + pulse * 0.5) * k;
@@ -820,7 +823,7 @@ export class MixingBench {
     m.attenuationColor.copy(v.color).lerp(WHITE, 0.35);
     m.attenuationDistance = water.tintDistance * (1 + milky * 3);
     // Light passing through is tinted by the base colour too, so keep that one paler.
-    m.color.copy(v.color).lerp(WHITE, 0.15 * (1 - milky));
+    m.color.copy(v.color).lerp(WHITE, 0.05 * (1 - milky));
     // Real white paint reflects ~60% under this much light; full albedo glowed like a lamp and its
     // bloom washed out every colour around it.
     m.color.multiplyScalar(1 - 0.4 * milky);

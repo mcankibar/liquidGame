@@ -27,8 +27,8 @@ export function createStudioEnvironment(renderer) {
   };
   const center = new THREE.Vector3(0, 0, 0);
   box(9, 5, 1.4, new THREE.Vector3(0, 6.8, 1), center, 0xfff8f0);
-  box(1.6, 9, 7, new THREE.Vector3(-10, 1.5, 4), center, 0xfff4ea);
-  box(1.2, 9, 3.5, new THREE.Vector3(10, 1.5, 2), center, 0xfff4ea);
+  box(1.6, 9, 2.6, new THREE.Vector3(-10, 1.5, 4), center, 0xfff4ea);
+  box(1.2, 9, 1.8, new THREE.Vector3(10, 1.5, 2), center, 0xfff4ea);
   box(6, 2.4, 1, new THREE.Vector3(1, 2, 11.5), center, 0xffffff);
   box(4, 7, 0.9, new THREE.Vector3(-3, 1, -11.5), center, 0xffffff);
 
@@ -69,8 +69,8 @@ export function createGlassMaterial(side) {
         float glassFres = pow(1.0 - glassNV, 3.0);
         float glassAlpha = clamp(0.012 + glassFres * 0.5, 0.0, 0.85);
         vec3 glassBody = vec3(0.02, 0.032, 0.03) + totalDiffuse * 0.03;
-        // Clamp: pinpoint candle highlights on smooth glass become HDR fireflies that bloom into blocks.
-        gl_FragColor = vec4(glassBody * glassAlpha + min(totalSpecular * 1.2, vec3(2.5)), glassAlpha);
+        // Clamp below the bloom threshold: brighter highlights bloomed into a white smear over the glass.
+        gl_FragColor = vec4(glassBody * glassAlpha + min(totalSpecular * 1.2, vec3(0.85)), glassAlpha);
         `
       )
       .replace("#include <premultiplied_alpha_fragment>", "");
@@ -294,7 +294,9 @@ export function createLiquidMaterial() {
       )
       .replace(
         "#include <opaque_fragment>",
-        `outgoingLight = min(outgoingLight, vec3(3.0));
+        // Keep the liquid under the bloom threshold, scaling the colour as a whole so a hot highlight
+        // stays tinted instead of clipping to white (it bloomed into a white column over the glass).
+        `outgoingLight *= min(1.0, 0.95 / max(max(outgoingLight.r, outgoingLight.g), max(outgoingLight.b, 1e-4)));
         #include <opaque_fragment>`
       );
   };

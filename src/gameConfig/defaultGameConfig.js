@@ -51,6 +51,7 @@ export const defaultGameConfig = {
       shelfThickness: 0.07,
       shelfColor: 0x7a4e2a,
       tagGap: 52, // px between the HUD card and the "HEDEF" tag
+      tilt: 14, // degrees the glass and shelf lean towards the player, so the liquid shows
       glow: 0.3, // coloured outline, halo and rune ring around the glass (0 = none)
       glassReflections: 0.35, // bright streaks on the glass; lower shows the colour better
       liquidClarity: 0.25 // lower than the pouring glasses so the wall does not show through
@@ -76,9 +77,9 @@ export const defaultGameConfig = {
     liquid: {
       // How much light passes through (0 = opaque paint, 1 = clear coloured water). White pigment
       // stays milky regardless.
-      clarity: 0.9,
+      clarity: 0.7,
       // Distance light travels before taking on the full colour: smaller = deeper, richer tint.
-      tintDistance: 0.22,
+      tintDistance: 0.14,
       roughness: 0.04,
       glow: 0.18,
       sparkle: 0.45,
@@ -100,7 +101,7 @@ export const defaultGameConfig = {
       // Warm key light from above the player's shoulder.
       key: { color: 0xfff6ec, intensity: 3 },
       // Soft light from every side: sky colour from above, ground colour from below.
-      // Near-white so pigments keep their true hue; the warmth comes from the candles and wood.
+      // Near-white so pigments keep their true hue; the warmth comes from the wood and stone.
       ambient: { skyColor: 0xffffff, groundColor: 0x8a8580, intensity: 2.4 },
       environment: 1.3, // strength of reflections on glass and liquid
       fill: { color: 0xffffff, intensity: 0.16 },
@@ -110,7 +111,7 @@ export const defaultGameConfig = {
     bloom: {
       enabled: true,
       strength: 0.9,
-      threshold: 1, // only light brighter than white (candles, glows) blooms
+      threshold: 1, // only light brighter than white (glows, sparks) blooms
       radius: 0.55
     },
 
@@ -121,7 +122,6 @@ export const defaultGameConfig = {
     },
 
     workshop: {
-      candleGlow: 1,
       dust: true
     },
 
@@ -164,6 +164,7 @@ export const gameConfigRanges = {
   "goalShelf.shelfWidth": V(0.6, 5),
   "goalShelf.shelfThickness": V(0.02, 0.3),
   "goalShelf.tagGap": V(20, 120, 1),
+  "goalShelf.tilt": V(0, 40, 1),
   "goalShelf.glow": V(0, 1.5),
   "goalShelf.glassReflections": V(0, 1.5),
   "goalShelf.liquidClarity": V(0, 1),
@@ -198,7 +199,6 @@ export const gameConfigRanges = {
   "bloom.radius": V(0, 1, 0.05),
   "quality.maxDpr": V(0.5, 3, 0.05),
   "quality.maxPixels": V(300000, 8000000, 100000),
-  "workshop.candleGlow": V(0, 2, 0.05),
   "audio.musicVolume": V(0, 1),
   "audio.effectsVolume": V(0, 1.5),
   "audio.pourVolume": V(0, 2),
@@ -244,6 +244,7 @@ export const gameConfigLabels = {
   "goalShelf.shelfThickness": "Raf kalınlığı",
   "goalShelf.shelfColor": "Raf rengi",
   "goalShelf.tagGap": "Etiket boşluğu (px)",
+  "goalShelf.tilt": "Öne eğim (°)",
   "goalShelf.glow": "Parıltı / dış çizgi",
   "goalShelf.glassReflections": "Cam yansıması",
   "goalShelf.liquidClarity": "Sıvı berraklığı",
@@ -308,8 +309,7 @@ export const gameConfigLabels = {
   "quality.maxPixels": "Piksel bütçesi",
   "quality.adaptive": "Uyarlanabilir kalite",
 
-  workshop: "🕯️ Atölye",
-  "workshop.candleGlow": "Mum ışıltısı",
+  workshop: "📜 Atölye",
   "workshop.dust": "Toz zerrecikleri",
 
   audio: "🔊 Ses",

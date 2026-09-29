@@ -4,7 +4,7 @@ import { defaultGameConfig } from "../gameConfig/defaultGameConfig.js";
 const workshopConfig = defaultGameConfig.components.workshop;
 
 // Procedural alchemist's workshop: oak bench, dark stone wall, a parchment of alchemical symbols,
-// candles with flickering light, glowing potions and drifting dust. No image files.
+// books and drifting dust. No image files.
 
 export const BENCH_BACK = -4.2;
 
@@ -199,69 +199,6 @@ function softDot(inner, outer) {
   return toTexture(canvas);
 }
 
-function flameTexture() {
-  const [canvas, ctx] = canvas2d(64, 128);
-  const g = ctx.createRadialGradient(32, 92, 2, 32, 80, 60);
-  g.addColorStop(0, "rgba(255,255,235,1)");
-  g.addColorStop(0.25, "rgba(255,200,90,0.95)");
-  g.addColorStop(0.6, "rgba(255,110,20,0.45)");
-  g.addColorStop(1, "rgba(255,60,0,0)");
-  ctx.fillStyle = g;
-  ctx.beginPath();
-  ctx.moveTo(32, 4);
-  ctx.bezierCurveTo(58, 60, 56, 118, 32, 120);
-  ctx.bezierCurveTo(8, 118, 6, 60, 32, 4);
-  ctx.fill();
-  return toTexture(canvas);
-}
-
-// No real lights: a candle glows through additive sprites (flame, halo, a warm pool on the bench),
-// which is far cheaper than point lights shading every pixel of the wall and bench.
-function candle(height, flameMap, glowMap, rand) {
-  const group = new THREE.Group();
-  const wax = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.075, 0.085, height, 16),
-    new THREE.MeshLambertMaterial({ color: 0xefe3c8, emissive: 0xffa050, emissiveIntensity: 0.12 })
-  );
-  wax.position.y = height / 2;
-  const dish = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.16, 0.18, 0.03, 20),
-    new THREE.MeshLambertMaterial({ color: 0x8c6a3a, emissive: 0x3a2008 })
-  );
-  dish.position.y = 0.015;
-  const additive = (map, color, opacity = 1) =>
-    new THREE.SpriteMaterial({
-      map,
-      color,
-      opacity,
-      transparent: true,
-      depthWrite: false,
-      blending: THREE.AdditiveBlending
-    });
-  const flame = new THREE.Sprite(additive(flameMap, 0xffffff));
-  flame.center.set(0.5, 0.05);
-  flame.position.y = height + 0.01;
-  flame.scale.set(0.09, 0.2, 1);
-  const halo = new THREE.Sprite(additive(glowMap, 0xff9a45, 0.55));
-  halo.position.y = height + 0.1;
-  halo.scale.setScalar(1.1);
-  const pool = new THREE.Mesh(
-    new THREE.PlaneGeometry(1.8, 1.8),
-    new THREE.MeshBasicMaterial({
-      map: glowMap,
-      color: 0xff8a3a,
-      opacity: 0.35,
-      transparent: true,
-      depthWrite: false,
-      blending: THREE.AdditiveBlending
-    })
-  );
-  pool.rotation.x = -Math.PI / 2;
-  pool.position.y = 0.004;
-  group.add(wax, dish, flame, halo, pool);
-  return { group, flame, halo, pool, seed: rand() * 100 };
-}
-
 function books(rand) {
   const group = new THREE.Group();
   const colors = [0x5a1f1a, 0x1f3a2a, 0x2a2440, 0x6b4a1c, 0x3b2a1a];
@@ -331,7 +268,7 @@ export function createWorkshop() {
     new THREE.PlaneGeometry(1.5, 2),
     new THREE.MeshLambertMaterial({ map: parchmentTexture() })
   );
-  parchment.position.set(3.1, 2.6, BENCH_BACK + 0.03);
+  parchment.position.set(2.3, 2.6, BENCH_BACK + 0.03);
   parchment.rotation.z = -0.03;
   group.add(top, apron, wall, parchment);
 
@@ -345,31 +282,10 @@ export function createWorkshop() {
     group.add(stack);
   }
 
-  const flameMap = flameTexture();
-  const glowMap = softDot("rgba(255,210,150,1)", "rgba(255,140,60,0.35)");
-  const candles = [
-    [-2.2, BENCH_BACK + 0.75, 0.62],
-    [-1.85, BENCH_BACK + 1.0, 0.4],
-    [1.9, BENCH_BACK + 0.85, 0.55],
-    [3.7, BENCH_BACK + 0.7, 0.45]
-  ].map(([x, z, h]) => {
-    const c = candle(h, flameMap, glowMap, rand);
-    c.group.position.set(x, 0, z);
-    group.add(c.group);
-    return c;
-  });
-
   const motes = dust(softDot("rgba(255,240,210,1)", "rgba(255,190,110,0.5)"));
   group.add(motes.points);
 
   function update(time) {
-    for (const c of candles) {
-      const f = 0.82 + 0.1 * Math.sin(time * 13 + c.seed) + 0.08 * Math.sin(time * 29 + c.seed * 2);
-      c.flame.scale.set(0.085 + 0.01 * Math.sin(time * 17 + c.seed), 0.2 * (0.9 + 0.15 * f), 1);
-      c.flame.material.rotation = Math.sin(time * 5 + c.seed) * 0.08;
-      c.halo.material.opacity = 0.45 * f * workshopConfig.candleGlow;
-      c.pool.material.opacity = 0.32 * f * workshopConfig.candleGlow;
-    }
     motes.points.visible = workshopConfig.dust;
     const pos = motes.points.geometry.attributes.position;
     motes.seeds.forEach((s, i) => {
