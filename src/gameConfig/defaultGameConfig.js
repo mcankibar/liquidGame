@@ -52,9 +52,7 @@ export const defaultGameConfig = {
       shelfColor: 0x7a4e2a,
       tagGap: 52, // px between the HUD card and the "HEDEF" tag
       tilt: 14, // degrees the glass and shelf lean towards the player, so the liquid shows
-      glow: 0.3, // coloured outline, halo and rune ring around the glass (0 = none)
-      glassReflections: 0.35, // bright streaks on the glass; lower shows the colour better
-      liquidClarity: 0.25 // lower than the pouring glasses so the wall does not show through
+      glow: 0 // coloured outline, halo and rune ring around the glass (0 = none)
     },
 
     pour: {
@@ -166,8 +164,6 @@ export const gameConfigRanges = {
   "goalShelf.tagGap": V(20, 120, 1),
   "goalShelf.tilt": V(0, 40, 1),
   "goalShelf.glow": V(0, 1.5),
-  "goalShelf.glassReflections": V(0, 1.5),
-  "goalShelf.liquidClarity": V(0, 1),
   "pour.hoverTilt": V(0, 45, 1),
   "pour.maxTilt": V(60, 160, 1),
   "pour.tiltSpeed": V(10, 200, 1),
@@ -246,8 +242,6 @@ export const gameConfigLabels = {
   "goalShelf.tagGap": "Etiket boşluğu (px)",
   "goalShelf.tilt": "Öne eğim (°)",
   "goalShelf.glow": "Parıltı / dış çizgi",
-  "goalShelf.glassReflections": "Cam yansıması",
-  "goalShelf.liquidClarity": "Sıvı berraklığı",
 
   pour: "🫗 Döküş",
   "pour.hoverTilt": "Bekleme eğimi (°)",

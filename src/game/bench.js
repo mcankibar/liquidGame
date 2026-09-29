@@ -46,35 +46,6 @@ function srgbColor(rgb, target = new THREE.Color()) {
   return target.setRGB(rgb[0], rgb[1], rgb[2], THREE.SRGBColorSpace);
 }
 
-/** three.js NeutralToneMapping (Khronos PBR Neutral) on one linear colour. */
-function neutralToneMap([r, g, b]) {
-  const low = Math.min(r, g, b);
-  const offset = low < 0.08 ? low - 6.25 * low * low : 0.04;
-  let c = [r - offset, g - offset, b - offset];
-  const peak = Math.max(...c);
-  const start = 0.76;
-  if (peak < start) return c;
-  const d = 1 - start;
-  const newPeak = 1 - (d * d) / (peak + d - start);
-  c = c.map((x) => (x * newPeak) / peak);
-  const k = 1 - 1 / (0.15 * (peak - newPeak) + 1);
-  return c.map((x) => x + (newPeak - x) * k);
-}
-
-/** Linear colour that `exposure` and neutral tone mapping turn into `target` (iterative solve). */
-function untoneMap(target, exposure, out) {
-  // Above 0.76 the tone curve blends every colour towards white, which no input can undo; keep the
-  // brightest channel at that knee so the hue stays exact (a very bright target just gets a bit darker).
-  const peak = Math.max(target.r, target.g, target.b, 1e-6);
-  const want = [target.r, target.g, target.b].map((x) => x * Math.min(1, 0.76 / peak));
-  let c = want.map((x) => x / exposure);
-  for (let i = 0; i < 40; i++) {
-    const got = neutralToneMap(c.map((x) => x * exposure));
-    c = c.map((x, j) => THREE.MathUtils.clamp(x + (want[j] - got[j]) / exposure, 0, 8));
-  }
-  return out.setRGB(c[0], c[1], c[2]);
-}
-
 /** Sources carry SUPPLY of the goal volume and grow (uniformly) past sources.startFill. */
 function sourceScale(shape, goalVolume) {
   const room = cavityOf(SHAPES[shape]).capacity * cfg.sources.startFill;
@@ -168,11 +139,6 @@ export class MixingBench {
     v.group.scale.setScalar(v.scale);
     v.group.rotation.x = cfg.goalShelf.tilt * DEG;
     v.shadow.visible = false;
-    // Its own, dimmer glass: the shared one's bright reflection streaks hide the goal colour.
-    v.ownGlass = createGlassMaterial(THREE.FrontSide);
-    v.ownGlassBack = createGlassMaterial(THREE.BackSide);
-    v.group.children[1].material = v.ownGlassBack;
-    v.group.children[2].material = v.ownGlass;
     // Oak wall shelf on iron brackets, reaching back to the wall. Unit-sized parts are stretched in
     // layoutShelf() so the shelf fits whatever wall distance and scale the config asks for.
     const plank = new THREE.Mesh(
@@ -262,8 +228,7 @@ export class MixingBench {
     const g = v.glow;
     const pulse = 0.5 + 0.5 * Math.sin(this.time * 2.4);
     const k = cfg.goalShelf.glow;
-    // Lean the glass and its shelf towards the player so the liquid inside shows; its surface leans
-    // along with it (see updateLiquid).
+    // Lean the glass and its shelf towards the player so the liquid inside shows.
     v.group.rotation.x = cfg.goalShelf.tilt * DEG;
     g.pool.material.opacity = (0.4 + pulse * 0.2) * k;
     g.ring.material.opacity = (0.6 + pulse * 0.4) * k;
@@ -271,8 +236,6 @@ export class MixingBench {
     g.sparks.material.opacity = k;
     g.runes.rotation.z = this.time * 0.35;
     g.runes.material.opacity = (0.45 + pulse * 0.35) * k;
-    v.ownGlass.envMapIntensity = 3.2 * (this.envIntensity ?? 1) * cfg.goalShelf.glassReflections;
-    v.ownGlassBack.envMapIntensity = v.ownGlass.envMapIntensity;
     g.ring.scale.setScalar(1 + pulse * 0.06);
     const pos = g.sparks.geometry.attributes.position;
     g.sparkSeeds.forEach((s, i) => {
@@ -352,8 +315,6 @@ export class MixingBench {
         if (obj.isMesh && obj.geometry) obj.geometry.dispose();
       });
       v.liquidMaterial.dispose();
-      v.ownGlass?.dispose();
-      v.ownGlassBack?.dispose();
       if (v.glow) {
         for (const part of [v.glow.pool, v.glow.ring, v.glow.sparks, v.glow.rim, v.glow.runes]) {
           part.material.dispose();
@@ -817,8 +778,7 @@ export class MixingBench {
     const m = v.liquidMaterial;
     const water = cfg.liquid;
     const milky = this.whiteShare(v);
-    const clarity = v === this.reference ? cfg.goalShelf.liquidClarity : water.clarity;
-    m.transmission = Math.max(0.001, clarity * (1 - 0.9 * milky));
+    m.transmission = Math.max(0.001, water.clarity * (1 - 0.9 * milky));
     m.roughness = water.roughness + milky * 0.25;
     // A paler absorption colour keeps the hue: fully saturated absorption turns thick yellow orange.
     m.attenuationColor.copy(v.color).lerp(WHITE, 0.35);
@@ -828,28 +788,20 @@ export class MixingBench {
     // Real white paint reflects ~60% under this much light; full albedo glowed like a lamp and its
     // bloom washed out every colour around it.
     m.color.multiplyScalar(1 - 0.4 * milky);
-    // The goal sample keeps its exact colour so it matches the HUD swatch.
-    // Neutral absorption: tinting both the surface and the light passing through doubles the
-    // colour and pushes orange towards red.
-    // The goal is a colour swatch: unlit, with an emissive colour chosen so that after exposure and
-    // tone mapping it lands on the exact target (tone mapping alone pulls orange towards coral).
-    if (v === this.reference) {
-      m.color.setRGB(0, 0, 0);
-      untoneMap(v.color, cfg.lighting.exposure, m.emissive);
-      m.attenuationColor.copy(WHITE);
-    }
     m.thickness = v.spec.rTop * 1.6 * (v.scale || 1);
   }
 
   updateLiquid(v, dt) {
     const u = v.uniforms;
     u.uTime.value = this.time;
-    // Milky liquid glowing reads as a lamp; the goal sample shows its plain colour.
-    u.uGlow.value = v === this.reference ? 0 : cfg.liquid.glow * (1 - 0.7 * this.whiteShare(v));
+    // Milky liquid glowing reads as a lamp.
+    u.uGlow.value = cfg.liquid.glow * (1 - 0.7 * this.whiteShare(v));
     u.uSparkle.value = cfg.liquid.sparkle;
     v.liquid.visible = v.volume > this.goalVolume * 0.0015;
 
-    const up = this.localUp(v.angle, this.tmp);
+    // The goal glass leans towards the player (about x); the cavity is round, so the same solve
+    // with that lean gives its level surface.
+    const up = this.localUp(v === this.reference ? v.group.rotation.x : v.angle, this.tmp);
     const c = solveLevel(v.cavity, up, v.volume);
     const origin = v.group.position;
     const k = v.scale || 1;
@@ -861,14 +813,6 @@ export class MixingBench {
     const py = c * k + origin.y;
     const n = this.tmp2.set(v.wobble.x, 1, v.wobble.z).normalize();
     u.uPlane.value.set(n.x, n.y, n.z, px * n.x + py * n.y + pz * n.z);
-    if (v === this.reference) {
-      // The goal sample is a display piece: its surface leans with the glass (parallel to the rim)
-      // instead of staying level, so the tilted glass shows a neat disc of colour.
-      const t = v.group.rotation.x;
-      n.set(0, Math.cos(t), Math.sin(t));
-      const d = c * k;
-      u.uPlane.value.set(n.x, n.y, n.z, origin.x * n.x + (origin.y + n.y * d) * n.y + (origin.z + n.z * d) * n.z);
-    }
     u.uLocal.value.copy(v.group.matrixWorld).invert();
     u.uAxis.value.set(origin.x, origin.z);
     v.level = py - origin.y;
