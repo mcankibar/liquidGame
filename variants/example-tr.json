@@ -1,0 +1,13 @@
+{
+  "name": "example-tr",
+  "overrides": {
+    "components.ctaButton1.localization.caption": { "en": "TRY IT", "tr": "HEMEN DENE" },
+    "components.ctaButton1.scale.portrait": 0.45,
+    "options.isBannerEnabled": true,
+    "components.banner1.localization.caption": { "en": "Only 1% can solve it", "tr": "Sadece %1'i çözebiliyor" },
+    "components.banner1.color": "#ffcc00",
+    "components.inGameLogo1.assets.logo": "file:../assets/logo3.png",
+    "components.tutorialHand2.isEnabled": false,
+    "options.link.ios": "https://apps.apple.com/app/id000000000"
+  }
+}
