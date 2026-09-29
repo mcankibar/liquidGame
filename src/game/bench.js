@@ -847,9 +847,16 @@ export class MixingBench {
       t.inflow = Math.min(1, t.inflow + share * 7);
       t.uniforms.uInflowColor.value.copy(source.color);
       t.uniforms.uImpact.value.copy(pt.p);
-      t.ripple = Math.min(1, t.ripple + share * 30);
-      t.foam = Math.min(1, t.foam + share * 10);
-      t.swirlRate = Math.min(2.6, t.swirlRate + share * 22);
+      const impact = THREE.MathUtils.clamp(-pt.v.y / 3, 0.35, 1.5);
+      t.ripple = Math.min(1, t.ripple + share * 30 * impact);
+      t.foam = Math.min(0.75, t.foam + share * 7 * impact);
+      const dx = pt.p.x - t.group.position.x;
+      const dz = pt.p.z - t.group.position.z;
+      // The stream falls in towards the centre, so its real torque is almost zero; it only picks the
+      // spin direction (falling back to the side the glass pours from), the strength is set here.
+      const torque = dz * pt.v.x - dx * pt.v.z;
+      const spin = Math.abs(torque) > 0.05 ? Math.sign(torque) : source.side || 1;
+      t.swirlRate = THREE.MathUtils.clamp(t.swirlRate + spin * share * 22 * impact, -2.6, 2.6);
       if (cfg.effects.bubbles && Math.random() < share * 90) {
         this.bubbles.spawn(
           pt.p.x + (Math.random() - 0.5) * 0.08,
@@ -858,18 +865,22 @@ export class MixingBench {
           source.color
         );
       }
-      t.wobble.vx += (Math.random() - 0.5) * share * 40;
-      t.wobble.vz += (Math.random() - 0.5) * share * 40;
+      t.wobble.vx += THREE.MathUtils.clamp(pt.v.x + dx * impact, -2, 2) * share * 5;
+      t.wobble.vz += THREE.MathUtils.clamp(pt.v.z + dz * impact, -2, 2) * share * 5;
       pt.volume = 0;
       t.splashClock += share * 60;
       while (t.splashClock > 1) {
         t.splashClock -= 1;
         if (!cfg.effects.splash) continue;
-        const spread = 0.5 + Math.random() * 0.6;
+        const spread = (0.5 + Math.random() * 0.6) * Math.sqrt(impact);
         const angle = Math.random() * Math.PI * 2;
         this.droplets.spawn(
           this.tmp.set(pt.p.x, surface + 0.01, pt.p.z),
-          this.tmp2.set(Math.cos(angle) * spread * 0.5, 0.9 + Math.random() * 1.6, Math.sin(angle) * spread * 0.5),
+          this.tmp2.set(
+            Math.cos(angle) * spread * 0.5,
+            (0.7 + Math.random() * 1.2) * Math.sqrt(impact),
+            Math.sin(angle) * spread * 0.5
+          ),
           0.005 + Math.random() * 0.008,
           source.color
         );
@@ -975,7 +986,7 @@ export class MixingBench {
           v.color.copy(goal);
           v.fresh = false;
         } else {
-          v.color.lerp(goal, 1 - Math.exp(-dt * 1.6));
+          v.color.lerp(goal, 1 - Math.exp(-dt * (1.2 + v.inflow * 1.4 + Math.abs(v.swirlRate) * 0.4)));
         }
       }
       v.inflow *= Math.exp(-dt * 0.55);
