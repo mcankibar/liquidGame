@@ -139,6 +139,7 @@ export class MixingBench {
     v.group.scale.setScalar(v.scale);
     v.group.rotation.x = cfg.goalShelf.tilt * DEG;
     v.shadow.visible = false;
+    v.contact.visible = false;
     // Oak wall shelf on iron brackets, reaching back to the wall. Unit-sized parts are stretched in
     // layoutShelf() so the shelf fits whatever wall distance and scale the config asks for.
     const plank = new THREE.Mesh(
@@ -327,6 +328,8 @@ export class MixingBench {
       }
       v.shadow.removeFromParent();
       v.shadow.material.dispose();
+      v.contact.removeFromParent();
+      v.contact.material.dispose();
     }
     this.vessels = [];
     this.sources = [];
@@ -337,6 +340,13 @@ export class MixingBench {
     const cavity = cavityOf(spec);
     const group = new THREE.Group();
     const glassGeometry = new THREE.LatheGeometry(glassProfile(spec), 48);
+    // 1 at the foot of the glass, fading out below the inside floor: the glass shader tints that band
+    // as thick glass. The floor itself stays clear, or it reads as a pale layer of liquid.
+    const ys = glassGeometry.attributes.position;
+    const baseMask = new Float32Array(ys.count);
+    for (let i = 0; i < ys.count; i++)
+      baseMask[i] = 1 - THREE.MathUtils.smoothstep(ys.getY(i), spec.base * 0.35, spec.base * 0.85);
+    glassGeometry.setAttribute("baseMask", new THREE.BufferAttribute(baseMask, 1));
     const back = new THREE.Mesh(glassGeometry, this.glassBack);
     back.renderOrder = 2;
     const front = new THREE.Mesh(glassGeometry, this.glassFront);
@@ -356,7 +366,13 @@ export class MixingBench {
       new THREE.MeshBasicMaterial({ map: this.blot, color: 0x1c140c, transparent: true, depthWrite: false })
     );
     shadow.rotation.x = -Math.PI / 2;
-    this.group.add(shadow);
+    // Tight dark contact shadow right under the base, so the glass sits on the bench.
+    const contact = new THREE.Mesh(
+      new THREE.PlaneGeometry(1, 1),
+      new THREE.MeshBasicMaterial({ map: this.blot, color: 0x120a04, transparent: true, depthWrite: false })
+    );
+    contact.rotation.x = -Math.PI / 2;
+    this.group.add(shadow, contact);
 
     const vessel = {
       shapeName,
@@ -369,6 +385,7 @@ export class MixingBench {
       uniforms: liquidMaterial.userData.uniforms,
       hit,
       shadow,
+      contact,
       volume: 0,
       color: new THREE.Color(),
       home: new THREE.Vector3(),
@@ -852,7 +869,11 @@ export class MixingBench {
       v.group.position.z + LIGHT_DIR.y * (0.08 + lift * 0.25)
     );
     v.shadow.scale.set(base * spread * 1.1, base * spread * 1.25, 1);
-    v.shadow.material.opacity = 0.42 * Math.exp(-lift * 2.5);
+    v.shadow.material.opacity = 0.35 * Math.exp(-lift * 2.5);
+    // The contact shadow only exists while the glass touches the bench.
+    v.contact.position.set(v.group.position.x, 0.004, v.group.position.z);
+    v.contact.scale.setScalar(v.spec.rBottom * 2.35);
+    v.contact.material.opacity = 0.28 * Math.exp(-lift * 14) * Math.cos(Math.min(Math.abs(v.angle), Math.PI / 2));
   }
 
   updateEffects(dt) {

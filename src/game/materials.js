@@ -61,7 +61,11 @@ export function createGlassMaterial(side) {
     side
   });
   material.onBeforeCompile = (shader) => {
+    shader.vertexShader = shader.vertexShader
+      .replace("#include <common>", "#include <common>\nattribute float baseMask;\nvarying float vBaseMask;")
+      .replace("#include <begin_vertex>", "#include <begin_vertex>\nvBaseMask = baseMask;");
     shader.fragmentShader = shader.fragmentShader
+      .replace("#include <common>", "#include <common>\nvarying float vBaseMask;")
       .replace(
         "#include <opaque_fragment>",
         `
@@ -69,6 +73,9 @@ export function createGlassMaterial(side) {
         float glassFres = pow(1.0 - glassNV, 3.0);
         float glassAlpha = clamp(0.012 + glassFres * 0.5, 0.0, 0.85);
         vec3 glassBody = vec3(0.02, 0.032, 0.03) + totalDiffuse * 0.03;
+        // The thick base reads as solid, faintly green glass instead of vanishing into the bench.
+        glassAlpha = max(glassAlpha, vBaseMask * (0.05 + 0.4 * glassFres));
+        glassBody = mix(glassBody, vec3(0.45, 0.58, 0.54) * (0.25 + totalDiffuse * 0.2), vBaseMask * 0.5);
         // Clamp below the bloom threshold: brighter highlights bloomed into a white smear over the glass.
         gl_FragColor = vec4(glassBody * glassAlpha + min(totalSpecular * 1.2, vec3(0.85)), glassAlpha);
         `
