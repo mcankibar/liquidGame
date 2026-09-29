@@ -91,7 +91,10 @@ export const defaultGameConfig = {
       vapor: true,
       sparks: true,
       splash: true,
-      vaporRate: 0.7
+      vaporRate: 0.7,
+      // Vapor and sparks are drawn this many times brighter than white so they bloom; the liquids
+      // and glass stay under the bloom threshold and keep their true colours.
+      glowStrength: 3
     },
 
     lighting: {
@@ -107,7 +110,7 @@ export const defaultGameConfig = {
     },
 
     bloom: {
-      enabled: true,
+      enabled: false, // off for now; turn on from the Scene Debugger to try it
       strength: 0.9,
       threshold: 1, // only light brighter than white (glows, sparks) blooms
       radius: 0.55
@@ -115,8 +118,7 @@ export const defaultGameConfig = {
 
     quality: {
       maxDpr: 1.5,
-      maxPixels: 2100000,
-      adaptive: true
+      maxPixels: 2100000
     },
 
     workshop: {
@@ -184,6 +186,7 @@ export const gameConfigRanges = {
   "liquid.swirlDecay": V(0.05, 2),
   "liquid.slosh": V(0, 3, 0.05),
   "effects.vaporRate": V(0, 3, 0.05),
+  "effects.glowStrength": V(0, 6, 0.1),
   "lighting.exposure": V(0.3, 2.5),
   "lighting.key.intensity": V(0, 6, 0.05),
   "lighting.ambient.intensity": V(0, 5, 0.05),
@@ -274,6 +277,7 @@ export const gameConfigLabels = {
   "effects.sparks": "Kıvılcımlar",
   "effects.splash": "Sıçrama damlaları",
   "effects.vaporRate": "Buhar yoğunluğu",
+  "effects.glowStrength": "Buhar/kıvılcım parlaklığı",
 
   lighting: "💡 Işık",
   "lighting.exposure": "Pozlama",
@@ -301,7 +305,6 @@ export const gameConfigLabels = {
   quality: "⚡ Performans",
   "quality.maxDpr": "En yüksek piksel oranı",
   "quality.maxPixels": "Piksel bütçesi",
-  "quality.adaptive": "Uyarlanabilir kalite",
 
   workshop: "📜 Atölye",
   "workshop.dust": "Toz zerrecikleri",

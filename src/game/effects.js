@@ -1,4 +1,7 @@
 import * as THREE from "three";
+import { defaultGameConfig } from "../gameConfig/defaultGameConfig.js";
+
+const effectsConfig = defaultGameConfig.components.effects;
 
 const MAX_BUBBLES = 70;
 const MAX_PUFFS = 36;
@@ -142,7 +145,8 @@ export class Vapor {
     if (!sprite) return;
     sprite.visible = true;
     sprite.position.copy(position);
-    sprite.material.color.copy(color).lerp(new THREE.Color(1, 1, 1), 0.25);
+    // Brighter than white so the puffs clear the bloom threshold and glow (effects.glowStrength).
+    sprite.material.color.copy(color).lerp(new THREE.Color(1, 1, 1), 0.25).multiplyScalar(effectsConfig.glowStrength);
     sprite.material.rotation = Math.random() * Math.PI * 2;
     this.puffs.push({
       sprite,
@@ -228,7 +232,7 @@ export class Sparks {
     this.sparks.push({
       p: position.clone(),
       v: new THREE.Vector3((Math.random() - 0.5) * 0.5, 0.1 + Math.random() * 0.35, (Math.random() - 0.5) * 0.5),
-      color: color.clone().lerp(new THREE.Color(1, 1, 1), 0.4),
+      color: color.clone().lerp(new THREE.Color(1, 1, 1), 0.4).multiplyScalar(effectsConfig.glowStrength),
       age: 0,
       life: 0.5 + Math.random() * 0.7,
       seed: Math.random() * 10

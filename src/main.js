@@ -49,11 +49,6 @@ class Game {
     this.isFinished = false;
     this.isPaused = false;
     this.session = createSession(LEVELS);
-    this.renderScale = 1;
-    // Cleared by adaptQuality on slow devices; tuning.bloom.enabled is the author's switch.
-    this.bloomAllowed = true;
-    this.frameTimes = [];
-    this.qualityHold = 0;
   }
 
   gameTitle() {
@@ -272,35 +267,14 @@ class Game {
   /**
    * Drawing-buffer size. The framework reports device pixels; filling all of them (up to 3x DPR)
    * with MSAA and bloom is what made the game fill-rate bound, so cap the effective DPR and the
-   * pixel count, then let `renderScale` trim further on slow devices.
+   * pixel count. Nothing is scaled at runtime; bloom is on or off as the config says.
    */
   renderSize() {
     const { width, height } = this.playable.helper.getScreenWidthHeight();
     const dpr = window.devicePixelRatio || 1;
     const { maxDpr, maxPixels } = tuning.quality;
     const cap = Math.min(1, maxDpr / dpr, Math.sqrt(maxPixels / (width * height)));
-    const scale = cap * this.renderScale;
-    return { width: Math.max(1, Math.round(width * scale)), height: Math.max(1, Math.round(height * scale)) };
-  }
-
-  /** Step resolution down while frames stay slow; creep back up after a calm spell. */
-  adaptQuality(dt) {
-    if (!tuning.quality.adaptive) return;
-    this.frameTimes.push(dt);
-    if (this.frameTimes.length < 45) return;
-    const avg = this.frameTimes.reduce((a, b) => a + b, 0) / this.frameTimes.length;
-    this.frameTimes.length = 0;
-    const now = performance.now();
-    // Bloom (the post-processing chain) is the most expensive single thing, so it goes first.
-    if (avg > 1 / 45 && this.bloomAllowed && tuning.bloom.enabled) {
-      this.bloomAllowed = false;
-      this.qualityHold = now + 8000;
-    } else if (avg > 1 / 40 && this.renderScale > 0.55) {
-      this.renderScale = Math.max(0.55, this.renderScale * 0.85);
-      this.qualityHold = now + 8000;
-    } else if (avg < 1 / 55 && this.renderScale < 1 && now > this.qualityHold) {
-      this.renderScale = Math.min(1, this.renderScale * 1.08);
-    }
+    return { width: Math.max(1, Math.round(width * cap)), height: Math.max(1, Math.round(height * cap)) };
   }
 
   update() {
@@ -308,7 +282,6 @@ class Game {
     const dt = Math.min(0.05, (now - (this.lastFrame ?? now)) / 1000);
     this.lastFrame = now;
     if (!this.isPaused) {
-      if (dt > 0) this.adaptQuality(dt);
       const resized = resizeCameraRenderer(
         this.renderer,
         () => this.renderSize(),
@@ -370,7 +343,7 @@ class Game {
   render() {
     if (!this.activeCamera || !this.orthoCamera) return;
     this.applyTuning();
-    if (!(tuning.bloom.enabled && this.bloomAllowed)) {
+    if (!tuning.bloom.enabled) {
       this.renderer.clear();
       this.renderer.render(this.perspScene, this.activeCamera);
       this.renderer.clearDepth();
