@@ -5,8 +5,9 @@ import { defaultGameConfig } from "../gameConfig/defaultGameConfig.js";
 const handConfig = defaultGameConfig.components.tutorialHand;
 
 // Fingertip inside tutorialHand.png, as a fraction of its width / height, and its height / width.
-const TIP = { x: 0.035, y: 0.025 };
-const HAND_ASPECT = 400 / 288;
+// The hand points up and to the right, so it rests below-left of what it taps.
+const TIP = { x: 0.955, y: 0.03 };
+const HAND_ASPECT = 420 / 349;
 
 /** `handImage` is the resolved asset entry of params.components.tutorialHand.assets.hand. */
 export function mountHud(actions, handImage) {
@@ -25,7 +26,10 @@ export function mountHud(actions, handImage) {
       <button type="button" class="retry-button" id="pg-retry" aria-label="Baştan başla">↻</button>
     </header>
     <p class="hint" id="pg-hint">Bir bardağa dokun, basılı tutarak dök</p>
-    <div class="guide" id="pg-guide" hidden><img class="guide-hand" id="pg-hand" alt="" draggable="false" /></div>
+    <div class="guide" id="pg-guide" hidden>
+      <img class="guide-hand" id="pg-hand" alt="" draggable="false" />
+      <div class="guide-hold"><span>Basılı tut</span><i><b></b></i></div>
+    </div>
     <div class="target-tag" id="pg-tag" hidden><span id="pg-tag-dot"></span>Hedef</div>
     <section class="result" id="pg-result" hidden>
       <div class="result-card">

@@ -53,7 +53,7 @@ export default defineConfig({
       assets: { backdrop: image("background.jpg") }
     }),
 
-    // Pointing hand of the level-1 tutorial: Openclipart #177491 (public domain), recoloured.
+    // Pointing hand of the level-1 tutorial (supplied by the team); it points up and to the right.
     tutorialHand: group("Tutorial hand", {
       componentType: "perspective",
       assets: { hand: image("tutorialHand.png") }

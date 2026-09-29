@@ -159,9 +159,9 @@
 }
 
 #pigment-hud .guide {
-  --hand-size: 96px;
-  --tip-x: -3px;
-  --tip-y: -3px;
+  --hand-size: 110px;
+  --tip-x: -105px;
+  --tip-y: -4px;
   --press: 1.3s;
   position: absolute;
   top: 0;
@@ -174,73 +174,154 @@
   display: none;
 }
 
-/* The fingertip sits on the glass: the hand fades in in place, presses and lifts; no travel. */
+/*
+ * The fingertip sits on the glass and the hand rests below-left of it, pointing up and to the right.
+ * It fades in in place and taps along the finger's direction; no travel from off-screen.
+ */
 #pigment-hud .guide-hand {
+  --lift: translate(-10px, 13px);
   position: absolute;
   left: var(--tip-x);
   top: var(--tip-y);
   width: var(--hand-size);
   height: auto;
   transform-origin: calc(var(--tip-x) * -1) calc(var(--tip-y) * -1);
-  filter: drop-shadow(0 8px 10px rgba(0, 0, 0, 0.45));
+  transform: var(--lift) scale(1);
+  filter: drop-shadow(0 10px 12px rgba(0, 0, 0, 0.4));
   animation: pg-hand-tap var(--press) ease-in-out infinite;
   user-select: none;
   -webkit-user-drag: none;
 }
 
 #pigment-hud .guide.is-hold .guide-hand {
-  animation: pg-hand-hold calc(var(--press) * 2) ease-in-out infinite;
+  animation: pg-hand-hold calc(var(--press) * 2.2) ease-in-out infinite;
 }
 
-/* Lifted: a little above and larger; pressed: fingertip on the anchor, slightly smaller. */
 @keyframes pg-hand-tap {
   0% {
-    transform: translateY(-14px) scale(1.06);
+    transform: var(--lift) scale(1);
     opacity: 0;
   }
   15%,
-  30% {
-    transform: translateY(-14px) scale(1.06);
+  32% {
+    transform: var(--lift) scale(1);
     opacity: 1;
   }
   45%,
   55% {
-    transform: translateY(0) scale(0.92);
+    transform: translate(0, 0) scale(0.94);
     opacity: 1;
   }
-  75%,
+  72%,
   88% {
-    transform: translateY(-14px) scale(1.06);
+    transform: var(--lift) scale(1);
     opacity: 1;
   }
   100% {
-    transform: translateY(-14px) scale(1.06);
+    transform: var(--lift) scale(1);
     opacity: 0;
   }
 }
 
+/* Press, then keep pressing (a slow squeeze shows the pressure) while the bar fills, then let go. */
 @keyframes pg-hand-hold {
   0% {
-    transform: translateY(-14px) scale(1.06);
+    transform: var(--lift) scale(1);
     opacity: 0;
   }
-  10%,
-  18% {
-    transform: translateY(-14px) scale(1.06);
+  8%,
+  14% {
+    transform: var(--lift) scale(1);
     opacity: 1;
   }
-  28%,
-  78% {
-    transform: translateY(0) scale(0.92);
+  22% {
+    transform: translate(0, 0) scale(0.93);
+  }
+  40%,
+  70% {
+    transform: translate(0, 0) scale(0.9);
+  }
+  55%,
+  84% {
+    transform: translate(0, 0) scale(0.93);
     opacity: 1;
   }
-  90% {
-    transform: translateY(-14px) scale(1.06);
+  94% {
+    transform: var(--lift) scale(1);
     opacity: 1;
   }
   100% {
-    transform: translateY(-14px) scale(1.06);
+    transform: var(--lift) scale(1);
     opacity: 0;
+  }
+}
+
+/* "Basılı tut" pill above the fingertip, with a bar that fills while the hand holds. */
+#pigment-hud .guide-hold {
+  position: absolute;
+  left: 0;
+  top: -54px;
+  transform: translateX(-50%);
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 12px 7px;
+  border-radius: 99px;
+  background: rgba(26, 17, 12, 0.85);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4), inset 0 0 0 1px rgba(217, 168, 91, 0.5);
+  color: #f3cf8e;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  animation: pg-hold-label calc(var(--press) * 2.2) ease-in-out infinite;
+}
+
+#pigment-hud .guide.is-hold .guide-hold {
+  display: flex;
+}
+
+#pigment-hud .guide-hold i {
+  width: 72px;
+  height: 5px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.15);
+  overflow: hidden;
+}
+
+#pigment-hud .guide-hold b {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #d9a85b, #ffe2a8);
+  transform-origin: left;
+  animation: pg-hold-bar calc(var(--press) * 2.2) linear infinite;
+}
+
+@keyframes pg-hold-label {
+  0%,
+  12% {
+    opacity: 0;
+  }
+  20%,
+  88% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes pg-hold-bar {
+  0%,
+  22% {
+    transform: scaleX(0);
+  }
+  84%,
+  100% {
+    transform: scaleX(1);
   }
 }
 

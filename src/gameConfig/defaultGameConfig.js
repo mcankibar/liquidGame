@@ -133,7 +133,7 @@ export const defaultGameConfig = {
 
     tutorialHand: {
       enabled: true,
-      size: 78, // px, width of the hand
+      size: 115, // px, width of the hand
       pressDuration: 1.3 // seconds per tap (a hold loop takes twice as long)
     }
   }

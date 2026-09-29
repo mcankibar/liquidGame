@@ -955,7 +955,9 @@ export class MixingBench {
       this.setGuide(null);
       return;
     }
-    const v = this.active && this.active.mode === "pour" ? this.active : this.active ? null : this.sources[0];
+    // The hand rests below-left of what it taps, so point at the right-most glass to keep it on screen.
+    const rightmost = this.sources.reduce((a, b) => (b.home.x > a.home.x ? b : a));
+    const v = this.active && this.active.mode === "pour" ? this.active : this.active ? null : rightmost;
     if (!v) {
       this.setGuide(null);
       return;
