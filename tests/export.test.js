@@ -33,7 +33,7 @@ const code = 'var text="new XMLHttpRequest() window.top";';
 const html = `<html><head>${networkBlock("default")}</head><body>${manifestBlock(manifest)}${configBlock(
   {}
 )}${assetsBlock(assets)}${gameBlock(code)}</body></html>`;
-const logo = "components.inGameLogo1.assets.logo";
+const imageField = "components.studio.assets.backdrop";
 
 test("every profile packages valid JS without modifying game code", () => {
   for (const network of Object.keys(EXPORT_NETWORKS)) {
@@ -57,13 +57,13 @@ test("runtime and packaging network catalogs stay in sync", () => {
   }
 });
 
-test("store link overrides warn only where the network ignores the URL", () => {
+test("store link overrides are orphans when the game has no store fields", () => {
   const overrides = { "options.link.ios": "https://apps.apple.com/app/id1" };
-  assert.deepEqual(exportVariant(html, { network: "unity", overrides }).report.warnings, []);
-  assert.deepEqual(exportVariant(html, { network: "tiktok" }).report.warnings, []);
-  const [warning] = exportVariant(html, { network: "tiktok", overrides }).report.warnings;
-  assert.match(warning, /options\.link\.ios has no effect/);
-  assert.match(exportVariant(html, { network: "facebook", overrides }).report.warnings[0], /may open/);
+  for (const network of ["unity", "tiktok", "facebook"]) {
+    const exported = exportVariant(html, { network, overrides });
+    assert.deepEqual(exported.report.warnings, [], network);
+    assert.ok(exported.report.orphans.includes("options.link.ios"), network);
+  }
 });
 
 test("Google and TikTok use their documented SDK entry points", () => {
@@ -83,9 +83,9 @@ test("Google and TikTok use their documented SDK entry points", () => {
 
 test("missing asset, unknown path, wrong boolean, fractional integer and unknown language are rejected", () => {
   for (const overrides of [
-    { [logo]: "missing.png" },
+    { [imageField]: "missing.png" },
     { "options.isSoundEnabled": "false" },
-    { "options.endCardSeconds": 1.5 }
+    { "components.perspectiveCamera.fov": 1.5 }
   ]) {
     assert.throws(() => exportVariant(html, { overrides }), /validation failed/);
   }
@@ -99,7 +99,7 @@ test("missing asset, unknown path, wrong boolean, fractional integer and unknown
   const tr = exportVariant(html, {
     language: "tr",
     overrides: {
-      "components.ctaButton1.localization.caption": { en: "PLAY", tr: "OYNA" }
+      "components.studio.localization.caption": { en: "Pigment", tr: "Pigment" }
     }
   });
   assert.equal(readJson(tr.files[0].data, "config")["options.language"], "tr");
@@ -111,7 +111,7 @@ test("asset path, base64, MIME, signatures and size limits are enforced", () => 
       () =>
         exportVariant(html, {
           network: "tiktok",
-          overrides: { [logo]: id },
+          overrides: { [imageField]: id },
           uploads: { [id]: PLACEHOLDERS.image }
         }),
       /Unsafe asset id/
@@ -125,7 +125,7 @@ test("asset path, base64, MIME, signatures and size limits are enforced", () => 
     assert.throws(
       () =>
         exportVariant(html, {
-          overrides: { [logo]: "u/probe.png" },
+          overrides: { [imageField]: "u/probe.png" },
           uploads: { "u/probe.png": asset }
         }),
       /validation failed/
@@ -149,10 +149,10 @@ test("release format and duplicate block validation", () => {
 });
 
 test("disabled images are pruned only from exports and shared assets remain usable", () => {
-  const id = definition.components.inGameLogo1.assets.logo.default;
+  const id = definition.components.studio.assets.backdrop.default;
   assert.ok(assets.find((a) => a.id === id).base64.length > PLACEHOLDERS.image.base64.length);
   const exported = exportVariant(html, {
-    overrides: { "components.inGameLogo1.isEnabled": false }
+    overrides: { "components.studio.isEnabled": false }
   });
   // Pruning computes all consumers; a shared active consumer prevents removal.
   assert.ok(exported.report.pruned.length > 0);
