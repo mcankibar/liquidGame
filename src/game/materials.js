@@ -315,14 +315,13 @@ export function createLiquidMaterial() {
 export function createStreamMaterial() {
   return new THREE.MeshPhysicalMaterial({
     color: 0xffffff,
-    roughness: 0.1,
+    roughness: 0.075,
     metalness: 0,
-    ior: 1.34,
-    clearcoat: 1,
-    clearcoatRoughness: 0.03,
+    ior: 1.33,
+    clearcoat: 0,
     envMapIntensity: 1.1,
     emissive: 0xffffff,
-    emissiveIntensity: 0.5
+    emissiveIntensity: 0.05
   });
 }
 

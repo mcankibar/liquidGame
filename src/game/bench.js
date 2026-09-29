@@ -910,7 +910,9 @@ export class MixingBench {
       this.updateLiquid(v, dt);
       if (v !== this.reference) this.updateBlots(v);
     }
-    for (const v of this.sources) if (v.stream) v.stream.rebuild(this.time);
+    for (const v of this.sources) {
+      if (v.stream) v.stream.rebuild(this.time, this.lipPoint(v, this.tmp));
+    }
   }
 
   /** Share of white pigment: white makes a milky, cloudy liquid instead of clear coloured water. */
@@ -965,8 +967,6 @@ export class MixingBench {
     u.uLocal.value.copy(v.group.matrixWorld).invert();
     u.uAxis.value.set(origin.x, origin.z);
     v.level = py - origin.y;
-    this.updateWater(v);
-
     if (v === this.target) {
       const rgb = mixRgb(v.mix);
       if (rgb) {
@@ -988,6 +988,18 @@ export class MixingBench {
       u.uSwirlAngle.value = v.swirlAngle;
       u.uInflow.value = v.inflow;
       u.uRipple.value = v.ripple;
+    }
+    this.updateWater(v);
+    if (v.stream) {
+      const m = v.stream.material;
+      const milky = this.whiteShare(v);
+      m.color
+        .copy(v.color)
+        .lerp(WHITE, 0.08 * (1 - milky))
+        .multiplyScalar(1 - 0.4 * milky);
+      m.roughness = cfg.liquid.roughness + 0.035 + milky * 0.25;
+      m.emissive.copy(v.color);
+      m.emissiveIntensity = cfg.liquid.glow * 0.3 * (1 - 0.7 * milky);
     }
   }
 

@@ -5,6 +5,10 @@ const streamConfig = defaultGameConfig.components.stream;
 const RADIAL = 10;
 const MAX_POINTS = 150;
 const MAX_DROPS = 90;
+const CIRCLE = Array.from({ length: RADIAL }, (_, j) => {
+  const a = (j / RADIAL) * Math.PI * 2;
+  return [Math.cos(a), Math.sin(a)];
+});
 
 /**
  * A falling pour. Points are emitted at the lip and fly ballistically; the tube is rebuilt through
@@ -14,8 +18,12 @@ const MAX_DROPS = 90;
 export class PourStream {
   constructor(scene, material) {
     this.points = [];
+    this.pool = [];
+    this.renderPoints = [];
+    this.radii = new Float32Array(MAX_POINTS + 1);
+    this.lip = { p: new THREE.Vector3(), v: new THREE.Vector3(), flow: 0, age: 0, connected: true };
     this.material = material;
-    const ringCount = MAX_POINTS;
+    const ringCount = MAX_POINTS + 1; // One visual-only ring stays attached to the lip.
     this.positions = new Float32Array(ringCount * RADIAL * 3);
     this.normals = new Float32Array(ringCount * RADIAL * 3);
     this.indices = new Uint16Array((ringCount - 1) * RADIAL * 6);
@@ -41,16 +49,24 @@ export class PourStream {
 
   /** `flow` is the pour strength in 0..1, `volume` what this point delivers. */
   emit(position, velocity, flow, volume) {
-    if (this.points.length >= MAX_POINTS) this.points.shift();
-    this.points.push({
-      p: position.clone(),
-      v: velocity.clone(),
-      flow,
-      volume,
-      connected: this.flowing,
-      age: 0,
-      seed: Math.random() * 100
-    });
+    // At capacity, coalesce the oldest packet rather than silently losing its volume.
+    if (this.points.length >= MAX_POINTS) {
+      const oldest = this.points.shift();
+      this.points[0].volume += oldest.volume;
+      this.points[0].connected = false;
+      this.pool.push(oldest);
+    }
+    const pt = this.pool.pop() ?? { p: new THREE.Vector3(), v: new THREE.Vector3() };
+    pt.p.copy(position);
+    pt.v.copy(velocity);
+    pt.flow = flow;
+    pt.volume = volume;
+    pt.connected = this.flowing;
+    pt.age = 0;
+    this.points.push(pt);
+    this.lip.p.copy(position);
+    this.lip.v.copy(velocity);
+    this.lip.flow = flow;
     this.flowing = true;
   }
 
@@ -60,7 +76,7 @@ export class PourStream {
 
   /** `absorb(point)` returns true when the point has landed and should be removed. */
   step(dt, absorb) {
-    const alive = [];
+    let alive = 0;
     for (let i = 0; i < this.points.length; i++) {
       const pt = this.points[i];
       pt.v.y -= streamConfig.gravity * dt;
@@ -69,16 +85,40 @@ export class PourStream {
       if (absorb(pt) || pt.age > 2.5) {
         const next = this.points[i + 1];
         if (next) next.connected = false;
+        this.pool.push(pt);
         continue;
       }
-      alive.push(pt);
+      this.points[alive++] = pt;
     }
-    this.points = alive;
+    this.points.length = alive;
   }
 
-  rebuild(time) {
-    const pts = this.points;
+  rebuild(time, lipPosition) {
+    const pts = this.renderPoints;
+    const physicalCount = this.points.length;
+    const attached = this.flowing && physicalCount > 0;
+    pts.length = physicalCount + (attached ? 1 : 0);
+    for (let i = 0; i < physicalCount; i++) pts[i] = this.points[i];
+    if (attached) {
+      if (lipPosition) this.lip.p.copy(lipPosition);
+      pts[physicalCount] = this.lip;
+    }
     const count = pts.length;
+    if (count < 2) {
+      this.geometry.setDrawRange(0, 0);
+      this.mesh.visible = false;
+      return;
+    }
+    // A coherent travelling disturbance, rather than unrelated random ring sizes.
+    for (let i = 0; i < count; i++) {
+      const pt = pts[i];
+      const speed = Math.max(pt.v.length(), 0.65);
+      let radius = (0.012 + 0.066 * Math.sqrt(pt.flow)) * Math.sqrt(0.7 / speed) * streamConfig.thickness;
+      radius *= 1 + Math.sin(pt.age * 32 - time * 8) * 0.025;
+      if (!pt.connected || i === 0) radius *= 0.65;
+      if (i === count - 1 && !attached) radius *= 0.55;
+      this.radii[i] = Math.min(0.095, Math.max(0.0035, radius));
+    }
     const { t, n, b, prevN } = this.tmp;
     let index = 0;
     let runStart = true;
@@ -106,29 +146,27 @@ export class PourStream {
       b.crossVectors(t, n);
       runStart = !nextLinked;
 
-      // Continuity: the cross-section shrinks as the fall speeds the liquid up.
-      const speed = Math.max(pt.v.length(), 0.7);
-      let radius = (0.01 + 0.034 * Math.sqrt(pt.flow)) * Math.sqrt(0.7 / speed) * streamConfig.thickness;
-      if (!linked) radius *= 0.55;
-      if (!nextLinked && i < count - 1) radius *= 0.7;
-      if (i === count - 1 && this.flowing) radius *= 1.25;
-      radius *= 1 + Math.sin(pt.seed + time * 26) * 0.07;
-      radius = Math.min(0.05, Math.max(0.0035, radius));
-
+      const radius = this.radii[i];
+      const lo = linked ? i - 1 : i;
+      const hi = nextLinked ? i + 1 : i;
+      const distance = pts[hi].p.distanceTo(pts[lo].p);
+      const slope =
+        distance > 1e-5 ? THREE.MathUtils.clamp((this.radii[hi] - this.radii[lo]) / distance, -0.7, 0.7) : 0;
+      // The liquid leaves the rim as a small sheet and rounds out as it falls.
+      const flatten = attached ? 1 + 0.3 * Math.exp(-pt.age * 40) : 1;
       for (let j = 0; j < RADIAL; j++) {
-        const a = (j / RADIAL) * Math.PI * 2;
-        const ca = Math.cos(a);
-        const sa = Math.sin(a);
-        const nx = n.x * ca + b.x * sa;
-        const ny = n.y * ca + b.y * sa;
-        const nz = n.z * ca + b.z * sa;
+        const [ca, sa] = CIRCLE[j];
         const o = (i * RADIAL + j) * 3;
-        this.positions[o] = pt.p.x + nx * radius;
-        this.positions[o + 1] = pt.p.y + ny * radius;
-        this.positions[o + 2] = pt.p.z + nz * radius;
-        this.normals[o] = nx;
-        this.normals[o + 1] = ny;
-        this.normals[o + 2] = nz;
+        this.positions[o] = pt.p.x + ((n.x * ca) / flatten + b.x * sa * flatten) * radius;
+        this.positions[o + 1] = pt.p.y + ((n.y * ca) / flatten + b.y * sa * flatten) * radius;
+        this.positions[o + 2] = pt.p.z + ((n.z * ca) / flatten + b.z * sa * flatten) * radius;
+        const sx = n.x * ca * flatten + (b.x * sa) / flatten - t.x * slope;
+        const sy = n.y * ca * flatten + (b.y * sa) / flatten - t.y * slope;
+        const sz = n.z * ca * flatten + (b.z * sa) / flatten - t.z * slope;
+        const invLength = 1 / Math.hypot(sx, sy, sz);
+        this.normals[o] = sx * invLength;
+        this.normals[o + 1] = sy * invLength;
+        this.normals[o + 2] = sz * invLength;
       }
       if (nextLinked) {
         for (let j = 0; j < RADIAL; j++) {
@@ -146,9 +184,16 @@ export class PourStream {
       }
     }
     this.geometry.setDrawRange(0, index);
-    this.geometry.attributes.position.needsUpdate = true;
-    this.geometry.attributes.normal.needsUpdate = true;
-    this.geometry.index.needsUpdate = true;
+    for (const attribute of [this.geometry.attributes.position, this.geometry.attributes.normal]) {
+      attribute.clearUpdateRanges();
+      attribute.addUpdateRange(0, count * RADIAL * 3);
+      attribute.needsUpdate = true;
+    }
+    if (index > 0) {
+      this.geometry.index.clearUpdateRanges();
+      this.geometry.index.addUpdateRange(0, index);
+      this.geometry.index.needsUpdate = true;
+    }
     this.mesh.visible = index > 0;
   }
 
