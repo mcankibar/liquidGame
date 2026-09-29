@@ -52,7 +52,7 @@ export const defaultGameConfig = {
       shelfThickness: 0.07,
       shelfColor: 0x7a4e2a,
       tagGap: 52, // px between the HUD card and the "HEDEF" tag
-      tilt: 14, // degrees the glass and shelf lean towards the player, so the liquid shows
+      tilt: 0, // degrees the glass and shelf lean towards the player, so the liquid shows
       glow: 0 // coloured outline, halo and rune ring around the glass (0 = none)
     },
 
