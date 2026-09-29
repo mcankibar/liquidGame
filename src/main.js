@@ -305,11 +305,12 @@ class Game {
     this.hud.showResult(outcome, toHex(targetRgb(this.session)), toHex(mixRgb(mix) || [1, 1, 1]));
   }
 
+  /** Retry resets the level on the spot (no slide out / in), so a colour can be replayed quickly. */
   onRetry() {
-    this.changeLevel(() => {
-      retry(this.session);
-      this.enterLevel();
-    });
+    if (this.changing) return;
+    this.hud.hideResult();
+    retry(this.session);
+    this.startLevel();
   }
 
   onNext() {
