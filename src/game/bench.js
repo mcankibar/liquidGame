@@ -276,8 +276,14 @@ export class MixingBench {
     const count = this.sources.length;
     const spread = (group.spread > 0 ? group.spread : [0, 0, 26, 50, 62][count]) * DEG;
     const { x: cx, y: cy, z: cz } = group.position;
-    this.sources.forEach((v, i) => {
-      const a = count > 1 ? -spread + (2 * spread * i) / (count - 1) : 0;
+    const slots = this.sources.map((_, i) => (count > 1 ? -spread + (2 * spread * i) / (count - 1) : 0));
+    // The middle of the arc stands right in front of the mixer, so a tall glass there covers it on
+    // screen: the shortest glasses take the most central slots, the tall ones the ends.
+    const byCentre = slots.map((a, i) => i).sort((i, j) => Math.abs(slots[i]) - Math.abs(slots[j]));
+    const byHeight = [...this.sources].sort((p, q) => p.spec.height - q.spec.height);
+    byCentre.forEach((slot, rank) => {
+      const v = byHeight[rank];
+      const a = slots[slot];
       v.home.set(cx + Math.sin(a) * group.arcWidth, cy, cz + Math.cos(a) * group.arcDepth);
       v.side = v.home.x < this.target.home.x - 0.01 ? -1 : 1;
     });
@@ -1110,7 +1116,17 @@ export class MixingBench {
 
   frameCamera(camera) {
     const cam = cfg.camera;
-    const dir = new THREE.Vector3(cam.direction.x, cam.direction.y, cam.direction.z).normalize();
+    // Wider screens look down more steeply: from the phone-portrait angle the middle source glass
+    // overlaps the mixer's base. Tall phones use `direction`, landscape `landscapeDirection`, and
+    // squarer screens (tablets) blend between the two.
+    const blend = THREE.MathUtils.smoothstep(camera.aspect, 0.5, 1);
+    const p = cam.direction;
+    const l = cam.landscapeDirection;
+    const dir = new THREE.Vector3(
+      THREE.MathUtils.lerp(p.x, l.x, blend),
+      THREE.MathUtils.lerp(p.y, l.y, blend),
+      THREE.MathUtils.lerp(p.z, l.z, blend)
+    ).normalize();
     const points = [];
     // Framed as if the mixer had its default size, so resizing it never moves the camera.
     const { target: t, sources } = this.framing;

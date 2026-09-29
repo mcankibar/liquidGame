@@ -10,6 +10,7 @@ export const defaultGameConfig = {
       autoFrame: true,
       // Auto framing: view direction (x sideways, y up, z towards the player) and the start look point.
       direction: { x: 0, y: 0.6, z: 1.46 },
+      landscapeDirection: { x: 0, y: 1.05, z: 1.46 }, // steeper, so front glasses clear the mixer
       lookAt: { x: 0, y: 1, z: 0.3 },
       // Manual camera (autoFrame: false).
       position: { x: 0, y: 6.5, z: 6 },
@@ -147,6 +148,7 @@ const XYZ = (x, y, z) => ({ x, y, z });
 // A position entry holds one range per axis.
 export const gameConfigRanges = {
   "camera.direction": XYZ(V(-1, 1), V(0.1, 2), V(0.1, 2)),
+  "camera.landscapeDirection": XYZ(V(-1, 1), V(0.1, 2), V(0.1, 2)),
   "camera.lookAt": XYZ(V(-3, 3), V(-2, 4), V(-4, 4)),
   "camera.position": XYZ(V(-10, 10), V(0, 20), V(-5, 20)),
   "mixer.position": XYZ(V(-3, 3), V(0, 2), V(-3.5, 2)),
@@ -209,7 +211,8 @@ export const gameConfigRanges = {
 export const gameConfigLabels = {
   camera: "📷 Kamera",
   "camera.autoFrame": "Otomatik kadraj",
-  "camera.direction": "Bakış yönü",
+  "camera.direction": "Bakış yönü (dikey)",
+  "camera.landscapeDirection": "Bakış yönü (yatay)",
   "camera.lookAt": "Bakılan nokta",
   "camera.position": "Konum (elle)",
   "camera.portrait": "Dikey ekran payları",
