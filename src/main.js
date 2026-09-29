@@ -201,8 +201,6 @@ class Game {
     this.onComponentsReady = () => {
       if (this.areComponentsReady) return;
       this.areComponentsReady = true;
-      const loading = document.getElementById("loading");
-      if (loading) loading.style.display = "none";
       this.eventBus.emit(FIRST_LOAD_EVENT);
       this.playable.renderComponents(this.components);
       if (this.sceneDebugger) this.sceneDebugger.refresh();
@@ -216,7 +214,9 @@ class Game {
     this.hud = mountHud(
       {
         onRetry: () => this.onRetry(),
-        onNext: () => this.onNext()
+        onNext: () => this.onNext(),
+        onPlay: () => this.onPlay(),
+        onAgain: () => this.onAgain()
       },
       this.currentGameConfig.components.tutorialHand?.assets?.hand
     );
@@ -225,10 +225,18 @@ class Game {
       onGuide: (point) => this.hud.setGuide(point),
       onReferenceTag: (point) => this.hud.setTag(point),
       safeTop: () => this.hud.cardBottom(),
-      onPick: () => this.audio.pick(),
+      onPick: () => {
+        this.audio.pick();
+        this.hud.hideHint(); // the first tap is enough; it comes back with the next level
+      },
+      onSlide: () => this.audio.whoosh(),
       onFinish: (mix) => this.onFinish(mix)
     });
+    // Empty bench first; the glasses come in when the player presses play.
+    this.stars = [];
     this.startLevel();
+    this.table.stageOut();
+    this.hud.showStart(this.gameTitle());
 
     if (import.meta.env.DEV && this.currentGameConfig.options.isSceneDebuggerEnabled) {
       import("./utils/SceneDebugger").then(({ SceneDebugger }) => this.setupDebugger(SceneDebugger));
@@ -248,20 +256,73 @@ class Game {
     this.table.show(this.session);
   }
 
+  /** Build the level off-stage and slide it in. */
+  enterLevel() {
+    this.startLevel();
+    return this.table.enter();
+  }
+
+  /** Clear the current glasses off the bench (they slide away, the goal flies up), then `next`. */
+  async changeLevel(next) {
+    if (this.changing) return;
+    this.changing = true;
+    this.hud.hideResult();
+    await this.table.exit();
+    next();
+    this.changing = false;
+  }
+
+  onPlay() {
+    if (this.playing) return;
+    this.playing = true;
+    // The dimmer fades out, then the glasses come in.
+    this.hud.hideStart().then(() => this.table.enter());
+  }
+
   onFinish(mix) {
     const outcome = finish(this.session, mix);
+    if (outcome.pass) {
+      this.stars[this.session.index] = Math.max(this.stars[this.session.index] || 0, outcome.stars);
+    }
+    if (outcome.pass && outcome.last) {
+      // Last colour done: clear the bench and celebrate instead of showing the result card. The win
+      // sound plays once, with the celebration screen.
+      setTimeout(
+        () =>
+          this.changeLevel(() => {
+            this.audio.win(3);
+            this.hud.showCelebration({
+              stars: this.stars.reduce((sum, n) => sum + (n || 0), 0),
+              maxStars: this.session.levels.length * 3
+            });
+          }),
+        700
+      );
+      return;
+    }
     if (outcome.pass) this.audio.win(outcome.stars);
     else this.audio.lose();
     this.hud.showResult(outcome, toHex(targetRgb(this.session)), toHex(mixRgb(mix) || [1, 1, 1]));
   }
 
   onRetry() {
-    retry(this.session);
-    this.startLevel();
+    this.changeLevel(() => {
+      retry(this.session);
+      this.enterLevel();
+    });
   }
 
   onNext() {
-    if (nextLevel(this.session)) this.startLevel();
+    this.changeLevel(() => {
+      if (nextLevel(this.session)) this.enterLevel();
+    });
+  }
+
+  onAgain() {
+    this.hud.hideCelebration();
+    nextLevel(this.session); // the last level passed, so this wraps to the first
+    this.stars = [];
+    this.enterLevel();
   }
 
   /**
@@ -292,6 +353,8 @@ class Game {
       );
       if (resized && this.table) this.table.needsFrame = true;
       if (this.table) this.table.tick(dt);
+      if (this.table) this.hud.setHintTop(this.table.shelfBottomPx());
+      if (this.table && this.hud.isStartShown()) this.hud.setStartTop(this.table.shelfBottomPx());
       if (this.table) this.audio.update(dt, this.table.pourStrength, this.table.fillRatio);
       if (this.table?.needsFrame && this.activeCamera) {
         this.table.frame(this.activeCamera);
@@ -457,7 +520,10 @@ export function initialize() {
       ]
     })
   );
-  if (import.meta.env.DEV) window.game = game;
+  if (import.meta.env.DEV) {
+    window.game = game;
+    window.gsap = gsap;
+  }
   return game;
 }
 

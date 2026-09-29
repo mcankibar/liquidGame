@@ -47,6 +47,21 @@ export function mountHud(actions, handImage) {
         </div>
       </div>
     </section>
+    <section class="start" id="pg-start" hidden>
+      <h2 class="start-title" id="pg-title" lang="en"></h2>
+      <p class="start-sub">Renkleri karıştır, hedef rengi tuttur</p>
+      <button type="button" class="primary play-button" id="pg-play">BAŞLA</button>
+    </section>
+    <section class="celebrate" id="pg-celebrate" hidden>
+      <div class="confetti" id="pg-confetti"></div>
+      <div class="celebrate-card">
+        <p class="celebrate-badge">🏆</p>
+        <h2 class="celebrate-title">Tebrikler!</h2>
+        <p class="celebrate-sub">Bütün renkleri karıştırdın, usta simyacı oldun.</p>
+        <p class="celebrate-stars"><span>★</span> <b id="pg-total"></b></p>
+        <button type="button" class="primary gold" id="pg-again">Baştan oyna</button>
+      </div>
+    </section>
   `;
   document.body.appendChild(root);
   const $ = (id) => root.querySelector(`#${id}`);
@@ -64,6 +79,11 @@ export function mountHud(actions, handImage) {
   let resultPass = false;
 
   $("pg-retry").addEventListener("click", actions.onRetry);
+  const start = $("pg-start");
+  const celebrate = $("pg-celebrate");
+  $("pg-play").addEventListener("click", () => actions.onPlay?.());
+  $("pg-again").addEventListener("click", () => actions.onAgain?.());
+  const CONFETTI = ["#ff5a5f", "#ffd166", "#06d6a0", "#4f8bff", "#c77dff", "#ff9f1c"];
   next.addEventListener("click", () => (resultPass ? actions.onNext() : actions.onRetry()));
 
   return {
@@ -128,6 +148,63 @@ export function mountHud(actions, handImage) {
     },
     hideResult() {
       result.hidden = true;
+    },
+    /** Title screen over the empty bench; the game HUD stays hidden until play. */
+    showStart(title) {
+      $("pg-title").textContent = title;
+      root.classList.add("is-intro");
+      start.hidden = false;
+    },
+    hideHint() {
+      hint.classList.add("is-hidden");
+    },
+    /** Put the hint line a little under this screen y (the shelf's underside). */
+    setHintTop(y) {
+      if (y === null) return;
+      const top = `${Math.round(y + 12)}px`;
+      if (hint.style.top !== top) hint.style.top = top;
+    },
+    isStartShown() {
+      return !start.hidden;
+    },
+    /** Title text starts a little under this screen y (the shelf's underside). */
+    setStartTop(shelfY) {
+      if (shelfY === null) return;
+      const top = `${Math.round(shelfY + 18)}px`;
+      if (start.style.paddingTop !== top) start.style.paddingTop = top;
+    },
+    /** Fades the title screen and its dimmer out; resolves once it is gone. */
+    hideStart() {
+      return new Promise((resolve) => {
+        start.classList.add("is-leaving");
+        setTimeout(() => {
+          start.hidden = true;
+          start.classList.remove("is-leaving");
+          root.classList.remove("is-intro");
+          resolve();
+        }, 350);
+      });
+    },
+    showCelebration({ stars, maxStars }) {
+      $("pg-total").textContent = `${stars} / ${maxStars}`;
+      const confetti = $("pg-confetti");
+      confetti.innerHTML = "";
+      for (let i = 0; i < 70; i++) {
+        const piece = document.createElement("i");
+        piece.style.left = `${Math.random() * 100}%`;
+        piece.style.background = CONFETTI[i % CONFETTI.length];
+        piece.style.animationDelay = `${Math.random() * 2.5}s`;
+        piece.style.animationDuration = `${2.6 + Math.random() * 2}s`;
+        piece.style.setProperty("--spin", `${(Math.random() < 0.5 ? -1 : 1) * (360 + Math.random() * 540)}deg`);
+        piece.style.setProperty("--drift", `${(Math.random() - 0.5) * 120}px`);
+        confetti.appendChild(piece);
+      }
+      root.classList.add("is-intro");
+      celebrate.hidden = false;
+    },
+    hideCelebration() {
+      celebrate.hidden = true;
+      root.classList.remove("is-intro");
     }
   };
 }

@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import gsap from "gsap";
 import {
   SHAPES,
   cavityOf,
@@ -142,6 +143,8 @@ export class MixingBench {
     v.contact.visible = false;
     // Oak wall shelf on iron brackets, reaching back to the wall. Unit-sized parts are stretched in
     // layoutShelf() so the shelf fits whatever wall distance and scale the config asks for.
+    // The shelf has its own group so the glass can drop onto it and fly off without taking it along.
+    const shelfGroup = new THREE.Group();
     const plank = new THREE.Mesh(
       new THREE.BoxGeometry(2.2, 0.07, 1),
       new THREE.MeshLambertMaterial({ color: 0x7a4e2a, emissive: 0x1a0c04 })
@@ -152,11 +155,13 @@ export class MixingBench {
       const post = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.4, 0.05), iron);
       const strut = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.035, 1), iron);
       strut.rotation.x = 0.55;
-      v.group.add(arm, post, strut);
+      shelfGroup.add(arm, post, strut);
       return { x, arm, post, strut };
     });
-    v.group.add(plank);
-    v.shelf = { plank, brackets };
+    shelfGroup.add(plank);
+    this.group.add(shelfGroup);
+    v.shelf = { group: shelfGroup, plank, brackets };
+    v.drop = 0; // world units the glass hangs above its shelf spot (enter / exit animations)
 
     const glowColor = v.color.clone();
     const tint = (extra = {}) => ({ color: glowColor, transparent: true, depthWrite: false, ...extra });
@@ -295,6 +300,8 @@ export class MixingBench {
     this.active = null;
     this.held = false;
     this.locked = false;
+    this.transitioning = false;
+    this.offstage = false;
     this.finished = false;
     this.settle = 0;
     this.lastPercent = -1;
@@ -305,12 +312,95 @@ export class MixingBench {
     this.emitProgress();
   }
 
+  /**
+   * Sideways distance that takes `v` fully off-screen towards `side`; wide landscape screens need
+   * much more than tall ones, so measure it with the camera.
+   */
+  offstageX(v, side) {
+    const p = this.tmp;
+    const r = v.spec.rTop * (v.scale || 1) + 0.1;
+    for (let d = 3; d < 60; d += 0.5) {
+      const x = v.home.x + side * (d - r);
+      const low = p.set(x, v.home.y, v.home.z).project(this.camera).x;
+      const high = p.set(x, v.home.y + v.spec.height * (v.scale || 1), v.home.z).project(this.camera).x;
+      if (Math.min(side * low, side * high) > 1.05) return v.home.x + side * d;
+    }
+    return v.home.x + side * 60;
+  }
+
+  /** How high the goal glass must hang above its shelf to be out of sight. */
+  offstageLift() {
+    const r = this.reference;
+    for (let d = 2; d < 60; d += 0.5) {
+      if (this.tmp.set(r.home.x, r.home.y + d, r.home.z).project(this.camera).y > 1.1) return d;
+    }
+    return 60;
+  }
+
+  /** Put the level's glasses off-screen (sources to their side, mixer to the left, goal up high). */
+  stageOut() {
+    for (const v of this.sources) v.group.position.x = this.offstageX(v, v.side);
+    this.target.group.position.x = this.offstageX(this.target, -1);
+    this.reference.drop = this.offstageLift();
+    this.offstage = true;
+    this.locked = true;
+    this.transitioning = true;
+    this.syncReference();
+  }
+
+  /** Slide the glasses in, then drop the goal onto its shelf. Resolves when the level is playable. */
+  enter() {
+    this.stageOut();
+    this.offstage = false;
+    return new Promise((resolve) => {
+      const slide = (v, delay) => gsap.to(v.group.position, { x: v.home.x, duration: 0.75, ease: "power3.out", delay });
+      slide(this.target, 0);
+      this.sources.forEach((v, i) => slide(v, 0.12 + i * 0.08));
+      this.hooks.onSlide?.();
+      gsap.to(this.reference, {
+        drop: 0,
+        duration: 0.85,
+        ease: "bounce.out",
+        delay: 0.55 + this.sources.length * 0.08,
+        onComplete: () => {
+          this.transitioning = false;
+          this.locked = false;
+          resolve();
+        }
+      });
+    });
+  }
+
+  /** Sources and mixer slide off to the sides, the goal flies up. Resolves when all are gone. */
+  exit() {
+    this.locked = true;
+    this.transitioning = true;
+    this.held = false;
+    return new Promise((resolve) => {
+      const away = (v, x, delay) => gsap.to(v.group.position, { x, duration: 0.55, ease: "power2.in", delay });
+      this.sources.forEach((v, i) => away(v, this.offstageX(v, v.side), i * 0.06));
+      away(this.target, this.offstageX(this.target, 1), 0.1);
+      this.hooks.onSlide?.();
+      // A little hop first, then it shoots up (a back-in ease would dip it through the shelf).
+      gsap
+        .timeline({ delay: 0.05 })
+        .to(this.reference, { drop: 0.25, duration: 0.14, ease: "power2.out" })
+        .to(this.reference, { drop: this.offstageLift(), duration: 0.5, ease: "power3.in" });
+      gsap.delayedCall(0.8, resolve);
+    });
+  }
+
   clearLevel() {
     this.droplets.clear();
     this.bubbles.clear();
     this.vapor.clear();
     this.sparks.clear();
+    gsap.killTweensOf(this.vessels.flatMap((v) => [v, v.group.position]));
     for (const v of this.vessels) {
+      if (v.shelf) {
+        v.shelf.group.removeFromParent();
+        v.shelf.group.traverse((obj) => obj.isMesh && obj.geometry.dispose());
+      }
       v.group.removeFromParent();
       v.group.traverse((obj) => {
         if (obj.isMesh && obj.geometry) obj.geometry.dispose();
@@ -564,6 +654,7 @@ export class MixingBench {
       this.accumulator -= STEP;
       this.step(STEP);
     }
+    this.syncReference();
     this.updateVisuals(dt);
     this.updateEffects(dt);
     this.workshop.update(this.time);
@@ -830,6 +921,8 @@ export class MixingBench {
     const py = c * k + origin.y;
     const n = this.tmp2.set(v.wobble.x, 1, v.wobble.z).normalize();
     u.uPlane.value.set(n.x, n.y, n.z, px * n.x + py * n.y + pz * n.z);
+    // Glasses move under tweens between renders, so refresh the matrix the clip test uses.
+    v.group.updateMatrixWorld();
     u.uLocal.value.copy(v.group.matrixWorld).invert();
     u.uAxis.value.set(origin.x, origin.z);
     v.level = py - origin.y;
@@ -880,8 +973,8 @@ export class MixingBench {
     const t = this.target;
     const level = THREE.MathUtils.clamp(t.level, t.spec.base, t.spec.height);
     this.bubbles.step(dt, {
-      cx: t.home.x,
-      cz: t.home.z,
+      cx: t.group.position.x,
+      cz: t.group.position.z,
       radius: innerRadius(t.spec, level) - 0.01,
       swirl: t.swirlRate * 0.8,
       surfaceY: (x, z) => this.targetSurfaceY(x, z)
@@ -896,13 +989,14 @@ export class MixingBench {
         t.vaporClock -= 1;
         const a = Math.random() * Math.PI * 2;
         const r = Math.random() * innerRadius(t.spec, level) * 0.6;
-        const x = t.home.x + Math.cos(a) * r;
-        const z = t.home.z + Math.sin(a) * r;
+        const x = t.group.position.x + Math.cos(a) * r;
+        const z = t.group.position.z + Math.sin(a) * r;
         this.vapor.emit(this.tmp.set(x, this.targetSurfaceY(x, z) + 0.05, z), t.color, 0.4, 0.5);
       }
     }
     const ref = this.reference;
-    ref.vaporClock += cfg.effects.vapor ? dt * cfg.effects.vaporRate * 1.3 : 0;
+    if (Math.abs(ref.drop) > 0.01) ref.vaporClock = 0;
+    else ref.vaporClock += cfg.effects.vapor ? dt * cfg.effects.vaporRate * 1.3 : 0;
     while (ref.vaporClock > 1) {
       ref.vaporClock -= 1;
       const top = ref.uniforms.uPlane.value.w;
@@ -965,7 +1059,7 @@ export class MixingBench {
    */
   guide() {
     const teaching = this.session?.index === 0 && !this.finished && this.target.volume < this.goalVolume * 0.02;
-    if (!teaching || !this.camera || this.held) {
+    if (!teaching || !this.camera || this.held || this.transitioning) {
       this.setGuide(null);
       return;
     }
@@ -997,6 +1091,10 @@ export class MixingBench {
   tagReference() {
     if (!this.camera || !this.reference) return;
     const r = this.reference;
+    if (this.transitioning) {
+      this.hooks.onReferenceTag?.(null);
+      return;
+    }
     this.tmp2.copy(r.home);
     this.tmp2.y += r.spec.height * r.scale + TAG_LIFT;
     this.hooks.onReferenceTag?.(this.screenPoint(this.tmp2));
@@ -1005,6 +1103,12 @@ export class MixingBench {
   frame(camera) {
     this.camera = camera;
     if (!this.target) return;
+    this.frameCamera(camera);
+    // Waiting off-stage (title screen): the off-screen distances depend on the new framing.
+    if (this.offstage) this.stageOut();
+  }
+
+  frameCamera(camera) {
     const cam = cfg.camera;
     const dir = new THREE.Vector3(cam.direction.x, cam.direction.y, cam.direction.z).normalize();
     const points = [];
@@ -1111,11 +1215,37 @@ export class MixingBench {
     camera.position.copy(look).addScaledVector(dir, Math.max(dist, 3));
     camera.lookAt(look);
     camera.updateMatrixWorld();
+    // Very short, wide screens push the camera far back; keep the whole workshop inside the far plane
+    // (with the default 100 it clipped everything and the scene went black).
+    const far = Math.max(100, dist * 2 + 60);
+    if (camera.far !== far) {
+      camera.far = far;
+      camera.updateProjectionMatrix();
+    }
+  }
+
+  /** Shelf stays at the goal's home; the glass sits `drop` above it while it falls in or flies out. */
+  syncReference() {
+    const r = this.reference;
+    if (!r) return;
+    r.group.position.set(r.home.x, r.home.y + r.drop, r.home.z);
+    r.shelf.group.position.copy(r.home);
+    r.shelf.group.scale.setScalar(r.scale);
+    r.shelf.group.rotation.x = r.group.rotation.x;
+  }
+
+  /** Screen y (CSS px) just under the shelf's brackets; the title screen hangs its text from it. */
+  shelfBottomPx() {
+    const r = this.reference;
+    if (!this.camera || !r) return null;
+    return this.screenPoint(this.tmp2.set(r.home.x, r.home.y - 0.3 * r.scale, r.home.z)).y;
   }
 
   /** Stretch the shelf parts (built in glass-local units) to the configured size and wall distance. */
   layoutShelf(r) {
     const shelf = cfg.goalShelf;
+    // The parchment hangs beside the goal glass, above the title screen's text.
+    this.workshop.parchment.position.y = r.home.y + 0.9;
     const gap = Math.max(0.05, (r.home.z - BENCH_BACK) / r.scale);
     const width = shelf.shelfWidth / r.scale;
     const thick = shelf.shelfThickness / r.scale;
@@ -1146,7 +1276,7 @@ export class MixingBench {
     const ndc = new THREE.Vector3();
     if (!shelf.autoPlace) {
       r.home.set(shelf.position.x, shelf.position.y, shelf.position.z);
-      r.group.position.copy(r.home);
+      this.syncReference();
       this.layoutShelf(r);
       return ndc.set(r.home.x, r.home.y - 0.45, r.home.z + 0.3).project(camera).y;
     }
@@ -1162,7 +1292,7 @@ export class MixingBench {
       const tagTop = ndc.set(0, r.home.y + h + tagRoom, refZ).project(camera).y;
       target += safeTop - tagTop;
     }
-    r.group.position.copy(r.home);
+    this.syncReference();
     this.layoutShelf(r);
     return ndc.set(0, r.home.y - 0.45, refZ + 0.3).project(camera).y;
   }

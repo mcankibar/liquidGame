@@ -329,5 +329,5 @@ export function createWorkshop() {
     pos.needsUpdate = true;
   }
 
-  return { group, update };
+  return { group, update, parchment };
 }

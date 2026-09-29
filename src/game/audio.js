@@ -198,6 +198,28 @@ export class GameAudio {
     this.bell(t + 0.045, 3150 + Math.random() * 200, 0.05, 0.25, this.fxBus);
   }
 
+  /** Glasses sliding across the bench: a soft rising-then-falling air sweep. */
+  whoosh() {
+    if (!this.started) return;
+    const ctx = this.ctx;
+    const t = ctx.currentTime;
+    const source = ctx.createBufferSource();
+    source.buffer = this.noise;
+    const filter = ctx.createBiquadFilter();
+    filter.type = "bandpass";
+    filter.Q.value = 1.2;
+    filter.frequency.setValueAtTime(400, t);
+    filter.frequency.exponentialRampToValueAtTime(1600, t + 0.35);
+    filter.frequency.exponentialRampToValueAtTime(600, t + 0.7);
+    const env = ctx.createGain();
+    env.gain.setValueAtTime(0, t);
+    env.gain.linearRampToValueAtTime(0.18, t + 0.25);
+    env.gain.exponentialRampToValueAtTime(0.0001, t + 0.75);
+    source.connect(filter).connect(env).connect(this.fxBus);
+    source.start(t);
+    source.stop(t + 0.8);
+  }
+
   /** Level passed: a rising arpeggio of chimes and a shimmer; more stars, more notes. */
   win(stars = 3) {
     if (!this.started) return;

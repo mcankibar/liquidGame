@@ -42,13 +42,18 @@
         letter-spacing: 0.14em;
         text-transform: uppercase;
       }
+
+      /* No splash: the element only shows up if the framework reports a load error into it. */
+      #loading:empty {
+        display: none;
+      }
     </style>
     <!--pl:head-->
   </head>
 
   <body id="body1">
     <canvas id="canvas"></canvas>
-    <div id="loading">Pigment</div>
+    <div id="loading"></div>
     <!--pl:body-->
   </body>
 </html>

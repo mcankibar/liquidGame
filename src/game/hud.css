@@ -466,3 +466,233 @@
     opacity: 0;
   }
 }
+
+/* Title screen and end-of-game celebration. While either is up the in-game HUD is hidden. */
+#pigment-hud.is-intro .target-card,
+#pigment-hud.is-intro .hint,
+#pigment-hud.is-intro .target-tag,
+#pigment-hud.is-intro .guide {
+  visibility: hidden;
+}
+
+/* Title screen: a light dimmer over the empty bench; the text hangs just under the wall shelf (its
+   screen position is set at runtime) and the parchment sits higher, beside the goal glass. */
+#pigment-hud .start {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: clamp(6px, 2.2vh, 18px);
+  padding: 40vh 16px 0; /* replaced at runtime with the shelf's screen position */
+  box-sizing: border-box;
+  background: rgba(12, 8, 5, 0.5);
+  pointer-events: auto;
+  transition: opacity 0.35s ease;
+}
+
+#pigment-hud .start.is-leaving {
+  opacity: 0;
+  pointer-events: none;
+}
+
+#pigment-hud .start[hidden],
+#pigment-hud .celebrate[hidden] {
+  display: none;
+}
+
+#pigment-hud .start-title {
+  margin: 0;
+  font-family: Palatino, Georgia, serif;
+  /* Shrinks with the narrower of width and height, so it never overflows a squeezed window. */
+  font-size: clamp(1.3rem, min(11vw, 7vh), 3.4rem);
+  letter-spacing: 0.14em;
+  white-space: nowrap;
+  text-transform: uppercase;
+  color: #f4ead7;
+  text-shadow: 0 4px 18px rgba(0, 0, 0, 0.6);
+}
+
+#pigment-hud .start-sub {
+  margin: 0 0 clamp(6px, 2.4vh, 22px);
+  font-size: clamp(0.75rem, min(4.2vw, 2.6vh), 1rem);
+  text-align: center;
+  font-weight: 600;
+  color: rgba(244, 230, 207, 0.9);
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.5);
+}
+
+#pigment-hud .primary.gold {
+  background: linear-gradient(#ffc45c, #f09a1a);
+  color: #3a2410;
+  box-shadow: 0 8px 18px rgba(240, 154, 26, 0.4);
+}
+
+#pigment-hud .play-button {
+  width: clamp(130px, 52vw, 200px);
+  min-height: clamp(36px, 7.5vh, 62px);
+  font-size: clamp(1rem, min(6.5vw, 4vh), 1.6rem);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: linear-gradient(#ffc45c, #f09a1a);
+  color: #3a2410;
+  box-shadow: 0 10px 24px rgba(240, 154, 26, 0.45);
+  animation: pg-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes pg-pulse {
+  50% {
+    transform: scale(1.06);
+  }
+}
+
+#pigment-hud .celebrate {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  box-sizing: border-box;
+  overflow: hidden;
+  background: radial-gradient(circle at 50% 40%, rgba(60, 38, 16, 0.55), rgba(12, 8, 5, 0.85));
+  pointer-events: auto;
+  animation: pg-fade 0.4s ease-out;
+}
+
+#pigment-hud .celebrate-card {
+  position: relative;
+  width: min(340px, 100%);
+  padding: 26px 22px 22px;
+  box-sizing: border-box;
+  text-align: center;
+  background: radial-gradient(circle at 50% 25%, #f8ebcd, #e2c796);
+  color: #3a2410;
+  border-radius: 26px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+  animation: pg-pop 0.5s cubic-bezier(0.2, 1.4, 0.4, 1);
+}
+
+#pigment-hud .celebrate-badge {
+  margin: 0;
+  font-size: 3.4rem;
+  line-height: 1;
+  animation: pg-bounce 1.6s ease-in-out infinite;
+}
+
+#pigment-hud .celebrate-title {
+  margin: 8px 0 4px;
+  font-size: 2rem;
+  font-weight: 800;
+}
+
+#pigment-hud .celebrate-sub {
+  margin: 0 0 14px;
+  font-weight: 600;
+  color: #6f5438;
+}
+
+#pigment-hud .celebrate-stars {
+  margin: 0 0 18px;
+  font-size: 1.6rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+#pigment-hud .celebrate-stars span {
+  color: #f3a712;
+}
+
+@keyframes pg-bounce {
+  50% {
+    transform: translateY(-8px) rotate(-6deg);
+  }
+}
+
+#pigment-hud .confetti {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+#pigment-hud .confetti i {
+  position: absolute;
+  top: -20px;
+  width: 9px;
+  height: 14px;
+  border-radius: 2px;
+  opacity: 0.95;
+  animation: pg-confetti linear infinite;
+}
+
+@keyframes pg-confetti {
+  from {
+    transform: translate(0, -20px) rotate(0);
+  }
+  to {
+    transform: translate(var(--drift), 110vh) rotate(var(--spin));
+  }
+}
+
+/* Short landscape screens: the target card moves to the top-left corner and shrinks, leaving the
+   top centre to the goal glass. */
+@media (orientation: landscape) and (max-height: 520px) {
+  #pigment-hud .target-card {
+    left: max(10px, env(safe-area-inset-left));
+    top: max(8px, env(safe-area-inset-top));
+    transform: none;
+    width: clamp(170px, 30vw, 300px);
+    padding: 6px 8px 7px 12px;
+    gap: 8px;
+    border-radius: 16px;
+  }
+
+  #pigment-hud .eyebrow {
+    font-size: 0.6rem;
+  }
+
+  #pigment-hud h1 {
+    margin: 0 0 4px;
+    font-size: clamp(0.85rem, 4vh, 1.1rem);
+  }
+
+  #pigment-hud .meter-track {
+    height: 6px;
+  }
+
+  #pigment-hud .meter-value {
+    min-width: 34px;
+    font-size: 0.8rem;
+  }
+
+  #pigment-hud .retry-button {
+    width: 32px;
+    height: 32px;
+    font-size: 1.05rem;
+  }
+
+  /* Title just under the shelf, the line under it, and the button down near the bottom edge. */
+  #pigment-hud .start {
+    padding-bottom: max(12vh, env(safe-area-inset-bottom));
+  }
+
+  #pigment-hud .start-title {
+    font-size: clamp(1.1rem, min(7vw, 9vh), 2.2rem);
+  }
+
+  #pigment-hud .start .play-button {
+    margin-top: auto;
+  }
+
+  #pigment-hud .start-sub {
+    margin: 0;
+    font-size: clamp(0.8rem, 3.4vh, 1rem);
+  }
+}
+
+/* Portrait: a little more room between the tagline and the start button. */
+@media (orientation: portrait) {
+  #pigment-hud .start .play-button {
+    margin-top: 4vh;
+  }
+}
