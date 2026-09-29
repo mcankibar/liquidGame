@@ -15,13 +15,13 @@ export default defineConfig({
 
     ambientLight1: group("Ambient light", {
       componentType: "perspective",
-      color: color(0xffd9b0),
+      color: color(0xffffff),
       intensity: num(0.1, { min: 0, max: 10, step: 0.05 })
     }),
 
     directionalLight1: group("Directional light", {
       componentType: "perspective",
-      color: color("#ffd6a8"),
+      color: color("#fff6ec"),
       intensity: num(0.95, { min: 0, max: 10, step: 0.05 }),
       position: { x: 4, y: 8, z: 5 },
       lookAtCoordinates: { x: 0, y: 0, z: 0 },

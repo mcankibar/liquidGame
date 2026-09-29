@@ -98,18 +98,19 @@ export const defaultGameConfig = {
     lighting: {
       exposure: 1.35,
       // Warm key light from above the player's shoulder.
-      key: { color: 0xffe2bd, intensity: 3 },
+      key: { color: 0xfff6ec, intensity: 3 },
       // Soft light from every side: sky colour from above, ground colour from below.
-      ambient: { skyColor: 0xffe6c8, groundColor: 0x5a3a22, intensity: 2.4 },
+      // Near-white so pigments keep their true hue; the warmth comes from the candles and wood.
+      ambient: { skyColor: 0xffffff, groundColor: 0x8a8580, intensity: 2.4 },
       environment: 1.3, // strength of reflections on glass and liquid
-      fill: { color: 0x9d7cff, intensity: 0.16 },
-      rim: { color: 0xffd2a0, intensity: 0.45 }
+      fill: { color: 0xffffff, intensity: 0.16 },
+      rim: { color: 0xfff2e4, intensity: 0.45 }
     },
 
     bloom: {
       enabled: true,
       strength: 0.9,
-      threshold: 0.8,
+      threshold: 1, // only light brighter than white (candles, glows) blooms
       radius: 0.55
     },
 

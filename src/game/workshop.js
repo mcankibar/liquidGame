@@ -66,7 +66,7 @@ function oakTexture() {
     ctx.fillStyle = "rgba(20,10,4,0.75)";
     ctx.fillRect(0, p * ph, 1024, 3);
   }
-  return toTexture(canvas, [1.6, 1]);
+  return toTexture(canvas, [4.8, 1]);
 }
 
 function stoneTexture() {
@@ -98,7 +98,7 @@ function stoneTexture() {
     }
     y += h;
   }
-  return toTexture(canvas, [4, 2]);
+  return toTexture(canvas, [12, 4]);
 }
 
 const SYMBOLS = ["☉", "☽", "☿", "♀", "♂", "♃", "♄", "△", "▽", "♁", "✶", "☼"];
@@ -312,19 +312,20 @@ export function createWorkshop() {
   const rand = rng(77);
 
   // Lambert, no bump: the wall and bench cover most of the screen, so they must shade cheaply.
+  // Both run far past the play area so wide landscape screens never see the empty background.
   const oak = new THREE.MeshLambertMaterial({ map: oakTexture() });
   const depth = 7.7;
   const front = BENCH_BACK + depth;
-  const top = new THREE.Mesh(new THREE.BoxGeometry(16, 0.24, depth), oak);
+  const top = new THREE.Mesh(new THREE.BoxGeometry(48, 0.24, depth), oak);
   top.position.set(0, -0.12, BENCH_BACK + depth / 2);
-  const apron = new THREE.Mesh(new THREE.BoxGeometry(16, 3, 0.1), new THREE.MeshBasicMaterial({ color: 0x1c1008 }));
-  apron.position.set(0, -1.6, front - 0.1);
+  const apron = new THREE.Mesh(new THREE.BoxGeometry(48, 10, 0.1), new THREE.MeshBasicMaterial({ color: 0x1c1008 }));
+  apron.position.set(0, -5.1, front - 0.1);
 
   const wall = new THREE.Mesh(
-    new THREE.PlaneGeometry(24, 12),
+    new THREE.PlaneGeometry(72, 24),
     new THREE.MeshLambertMaterial({ map: stoneTexture(), color: 0xd8c8b8 })
   );
-  wall.position.set(0, 6, BENCH_BACK);
+  wall.position.set(0, 12, BENCH_BACK);
 
   const parchment = new THREE.Mesh(
     new THREE.PlaneGeometry(1.5, 2),

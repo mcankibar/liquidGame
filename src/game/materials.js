@@ -1,6 +1,9 @@
 import * as THREE from "three";
 
-/** Dim studio with soft boxes: gives glass the long vertical highlights of a product shot. */
+/**
+ * Dim studio with neutral soft boxes: gives glass the long vertical highlights of a product shot.
+ * Kept white on purpose; tinted boxes show up as coloured reflections and shift the liquid hues.
+ */
 export function createStudioEnvironment(renderer) {
   const env = new THREE.Scene();
   const room = new THREE.Mesh(
@@ -8,7 +11,7 @@ export function createStudioEnvironment(renderer) {
     new THREE.MeshBasicMaterial({ color: 0x140e0a, side: THREE.BackSide })
   );
   env.add(room);
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(24, 24), new THREE.MeshBasicMaterial({ color: 0x3a2818 }));
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(24, 24), new THREE.MeshBasicMaterial({ color: 0x2c2926 }));
   floor.rotation.x = -Math.PI / 2;
   floor.position.y = -6.9;
   env.add(floor);
@@ -23,11 +26,11 @@ export function createStudioEnvironment(renderer) {
     env.add(mesh);
   };
   const center = new THREE.Vector3(0, 0, 0);
-  box(9, 5, 1.4, new THREE.Vector3(0, 6.8, 1), center, 0xffd9a8);
-  box(1.6, 9, 7, new THREE.Vector3(-10, 1.5, 4), center, 0xffc98a);
-  box(1.2, 9, 3.5, new THREE.Vector3(10, 1.5, 2), center, 0xffb070);
-  box(6, 2.4, 1, new THREE.Vector3(1, 2, 11.5), center, 0xffe0b8);
-  box(4, 7, 0.9, new THREE.Vector3(-3, 1, -11.5), center, 0xb58cff);
+  box(9, 5, 1.4, new THREE.Vector3(0, 6.8, 1), center, 0xfff8f0);
+  box(1.6, 9, 7, new THREE.Vector3(-10, 1.5, 4), center, 0xfff4ea);
+  box(1.2, 9, 3.5, new THREE.Vector3(10, 1.5, 2), center, 0xfff4ea);
+  box(6, 2.4, 1, new THREE.Vector3(1, 2, 11.5), center, 0xffffff);
+  box(4, 7, 0.9, new THREE.Vector3(-3, 1, -11.5), center, 0xffffff);
 
   const pmrem = new THREE.PMREMGenerator(renderer);
   const texture = pmrem.fromScene(env, 0.035).texture;

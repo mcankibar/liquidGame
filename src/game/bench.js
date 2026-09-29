@@ -46,6 +46,35 @@ function srgbColor(rgb, target = new THREE.Color()) {
   return target.setRGB(rgb[0], rgb[1], rgb[2], THREE.SRGBColorSpace);
 }
 
+/** three.js NeutralToneMapping (Khronos PBR Neutral) on one linear colour. */
+function neutralToneMap([r, g, b]) {
+  const low = Math.min(r, g, b);
+  const offset = low < 0.08 ? low - 6.25 * low * low : 0.04;
+  let c = [r - offset, g - offset, b - offset];
+  const peak = Math.max(...c);
+  const start = 0.76;
+  if (peak < start) return c;
+  const d = 1 - start;
+  const newPeak = 1 - (d * d) / (peak + d - start);
+  c = c.map((x) => (x * newPeak) / peak);
+  const k = 1 - 1 / (0.15 * (peak - newPeak) + 1);
+  return c.map((x) => x + (newPeak - x) * k);
+}
+
+/** Linear colour that `exposure` and neutral tone mapping turn into `target` (iterative solve). */
+function untoneMap(target, exposure, out) {
+  // Above 0.76 the tone curve blends every colour towards white, which no input can undo; keep the
+  // brightest channel at that knee so the hue stays exact (a very bright target just gets a bit darker).
+  const peak = Math.max(target.r, target.g, target.b, 1e-6);
+  const want = [target.r, target.g, target.b].map((x) => x * Math.min(1, 0.76 / peak));
+  let c = want.map((x) => x / exposure);
+  for (let i = 0; i < 40; i++) {
+    const got = neutralToneMap(c.map((x) => x * exposure));
+    c = c.map((x, j) => THREE.MathUtils.clamp(x + (want[j] - got[j]) / exposure, 0, 8));
+  }
+  return out.setRGB(c[0], c[1], c[2]);
+}
+
 /** Sources carry SUPPLY of the goal volume and grow (uniformly) past sources.startFill. */
 function sourceScale(shape, goalVolume) {
   const room = cavityOf(SHAPES[shape]).capacity * cfg.sources.startFill;
@@ -792,10 +821,18 @@ export class MixingBench {
     m.attenuationDistance = water.tintDistance * (1 + milky * 3);
     // Light passing through is tinted by the base colour too, so keep that one paler.
     m.color.copy(v.color).lerp(WHITE, 0.15 * (1 - milky));
+    // Real white paint reflects ~60% under this much light; full albedo glowed like a lamp and its
+    // bloom washed out every colour around it.
+    m.color.multiplyScalar(1 - 0.4 * milky);
     // The goal sample keeps its exact colour so it matches the HUD swatch.
+    // Neutral absorption: tinting both the surface and the light passing through doubles the
+    // colour and pushes orange towards red.
+    // The goal is a colour swatch: unlit, with an emissive colour chosen so that after exposure and
+    // tone mapping it lands on the exact target (tone mapping alone pulls orange towards coral).
     if (v === this.reference) {
-      m.color.copy(v.color);
-      m.attenuationColor.copy(v.color);
+      m.color.setRGB(0, 0, 0);
+      untoneMap(v.color, cfg.lighting.exposure, m.emissive);
+      m.attenuationColor.copy(WHITE);
     }
     m.thickness = v.spec.rTop * 1.6 * (v.scale || 1);
   }
