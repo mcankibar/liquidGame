@@ -47,6 +47,18 @@ function srgbColor(rgb, target = new THREE.Color()) {
   return target.setRGB(rgb[0], rgb[1], rgb[2], THREE.SRGBColorSpace);
 }
 
+/** Put a recycled liquid material's shader uniforms back to the values it was created with. */
+function resetUniforms(material) {
+  const uniforms = material.userData.uniforms;
+  const initial = (material.userData.initialUniforms ??= Object.fromEntries(
+    Object.entries(uniforms).map(([k, u]) => [k, u.value?.clone ? u.value.clone() : u.value])
+  ));
+  for (const [k, value] of Object.entries(initial)) {
+    if (value?.clone) uniforms[k].value.copy(value);
+    else uniforms[k].value = value;
+  }
+}
+
 /** Sources carry SUPPLY of the goal volume and grow (uniformly) past sources.startFill. */
 function sourceScale(shape, goalVolume) {
   const room = cavityOf(SHAPES[shape]).capacity * cfg.sources.startFill;
@@ -66,6 +78,9 @@ export class MixingBench {
     this.glassBack = createGlassMaterial(THREE.BackSide);
     this.glassFront = createGlassMaterial(THREE.FrontSide);
     this.blot = createBlotTexture();
+    this.liquidPool = [];
+    this.geometryCache = new Map();
+    this.streamPool = [];
     this.dropMaterial = createStreamMaterial();
     this.dropMaterial.emissive.set(0x000000);
     this.droplets = new Droplets(scene, this.dropMaterial);
@@ -163,23 +178,51 @@ export class MixingBench {
     v.shelf = { group: shelfGroup, plank, brackets };
     v.drop = 0; // world units the glass hangs above its shelf spot (enter / exit animations)
 
-    const glowColor = v.color.clone();
-    const tint = (extra = {}) => ({ color: glowColor, transparent: true, depthWrite: false, ...extra });
-    const pool = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial(tint({ map: this.blot })));
+    // The glow materials live across levels: re-creating the rim ShaderMaterial each level made
+    // three.js drop and recompile its program every transition (up to ~300 ms on a new level).
+    const mats = this.glowMaterials();
+    mats.pool.color.copy(v.color);
+    mats.ring.color.copy(v.color);
+    mats.runes.color.copy(v.color);
+    mats.rim.uniforms.uColor.value.copy(v.color);
+    mats.sparks.color.copy(v.color).lerp(WHITE, 0.35);
+    const pool = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), mats.pool);
     pool.rotation.x = -Math.PI / 2;
     pool.position.y = 0.006;
     pool.scale.setScalar(1.6);
-    const ring = new THREE.Mesh(
-      new THREE.TorusGeometry(v.spec.rBottom + 0.1, 0.014, 8, 64),
-      new THREE.MeshBasicMaterial(tint())
-    );
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(v.spec.rBottom + 0.1, 0.014, 8, 64), mats.ring);
     ring.rotation.x = Math.PI / 2;
     ring.position.y = 0.012;
     // Colored Fresnel shell just outside the glass: reads as a glowing outline on any background.
-    const rim = new THREE.Mesh(
-      v.group.children[1].geometry,
-      new THREE.ShaderMaterial({
-        uniforms: { uColor: { value: glowColor }, uStrength: { value: 0 } },
+    const rim = new THREE.Mesh(v.group.children[1].geometry, mats.rim);
+    rim.renderOrder = 6;
+    const sparkCount = 26;
+    const sparkSeeds = [];
+    for (let i = 0; i < sparkCount; i++) {
+      sparkSeeds.push({ a: Math.random() * Math.PI * 2, r: 0.3 + Math.random() * 0.25, t: Math.random() });
+    }
+    const sparkGeometry = new THREE.BufferGeometry();
+    sparkGeometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(sparkCount * 3), 3));
+    const sparks = new THREE.Points(sparkGeometry, mats.sparks);
+    sparks.frustumCulled = false;
+    const runes = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), mats.runes);
+    runes.rotation.x = -Math.PI / 2;
+    runes.position.y = 0.01;
+    runes.scale.setScalar(1.25);
+    v.group.add(pool, ring, sparks, rim, runes);
+    v.glow = { pool, ring, sparks, rim, runes, sparkSeeds };
+    return v;
+  }
+
+  /** Materials of the goal glass's glow (halo, ring, outline, sparks, runes), built once. */
+  glowMaterials() {
+    if (this.glowMats) return this.glowMats;
+    const tint = (extra = {}) => ({ color: new THREE.Color(), transparent: true, depthWrite: false, ...extra });
+    this.glowMats = {
+      pool: new THREE.MeshBasicMaterial(tint({ map: this.blot })),
+      ring: new THREE.MeshBasicMaterial(tint()),
+      rim: new THREE.ShaderMaterial({
+        uniforms: { uColor: { value: new THREE.Color() }, uStrength: { value: 0 } },
         vertexShader: `
           varying vec3 vN;
           varying vec3 vV;
@@ -201,33 +244,11 @@ export class MixingBench {
           }`,
         transparent: true,
         depthWrite: false
-      })
-    );
-    rim.renderOrder = 6;
-    const sparkCount = 26;
-    const sparkSeeds = [];
-    for (let i = 0; i < sparkCount; i++) {
-      sparkSeeds.push({ a: Math.random() * Math.PI * 2, r: 0.3 + Math.random() * 0.25, t: Math.random() });
-    }
-    const sparkGeometry = new THREE.BufferGeometry();
-    sparkGeometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(sparkCount * 3), 3));
-    const sparks = new THREE.Points(
-      sparkGeometry,
-      new THREE.PointsMaterial(
-        tint({ map: this.blot, color: glowColor.clone().lerp(new THREE.Color(1, 1, 1), 0.35), size: 0.06 })
-      )
-    );
-    sparks.frustumCulled = false;
-    const runes = new THREE.Mesh(
-      new THREE.PlaneGeometry(1, 1),
-      new THREE.MeshBasicMaterial(tint({ map: this.runes, blending: THREE.AdditiveBlending }))
-    );
-    runes.rotation.x = -Math.PI / 2;
-    runes.position.y = 0.01;
-    runes.scale.setScalar(1.25);
-    v.group.add(pool, ring, sparks, rim, runes);
-    v.glow = { pool, ring, sparks, rim, runes, sparkSeeds };
-    return v;
+      }),
+      sparks: new THREE.PointsMaterial(tint({ map: this.blot, size: 0.06 })),
+      runes: new THREE.MeshBasicMaterial(tint({ map: this.runes, blending: THREE.AdditiveBlending }))
+    };
+    return this.glowMats;
   }
 
   animateGlow(v) {
@@ -407,18 +428,15 @@ export class MixingBench {
       }
       v.group.removeFromParent();
       v.group.traverse((obj) => {
-        if (obj.isMesh && obj.geometry) obj.geometry.dispose();
+        if (obj.isMesh && obj.geometry && !obj.geometry.userData.cached) obj.geometry.dispose();
       });
-      v.liquidMaterial.dispose();
-      if (v.glow) {
-        for (const part of [v.glow.pool, v.glow.ring, v.glow.sparks, v.glow.rim, v.glow.runes]) {
-          part.material.dispose();
-        }
-        v.glow.sparks.geometry.dispose();
-      }
+      // Physical liquid / stream materials are recycled: setting up a fresh one on its first draw cost
+      // ~40 ms per level, a visible hitch in the middle of the level transition.
+      this.liquidPool.push(v.liquidMaterial);
+      if (v.glow) v.glow.sparks.geometry.dispose(); // its materials are kept (glowMaterials)
       if (v.stream) {
         v.stream.dispose();
-        v.stream.material.dispose();
+        this.streamPool.push(v.stream.material);
       }
       v.shadow.removeFromParent();
       v.shadow.material.dispose();
@@ -429,10 +447,14 @@ export class MixingBench {
     this.sources = [];
   }
 
-  buildVessel(shapeName, key, scale = 1) {
-    const spec = scaleSpec(SHAPES[shapeName], scale);
-    const cavity = cavityOf(spec);
-    const group = new THREE.Group();
+  /**
+   * Glass, liquid and hit geometry for a shape at a scale. Cached across levels (levels reuse the same
+   * few glasses), so a new level uploads almost nothing to the GPU.
+   */
+  vesselGeometry(shapeName, scale, spec) {
+    const key = `${shapeName}@${scale.toFixed(5)}`;
+    let entry = this.geometryCache.get(key);
+    if (entry) return entry;
     const glassGeometry = new THREE.LatheGeometry(glassProfile(spec), 48);
     // 1 at the foot of the glass, fading out below the inside floor: the glass shader tints that band
     // as thick glass. The floor itself stays clear, or it reads as a pale layer of liquid.
@@ -441,17 +463,30 @@ export class MixingBench {
     for (let i = 0; i < ys.count; i++)
       baseMask[i] = 1 - THREE.MathUtils.smoothstep(ys.getY(i), spec.base * 0.35, spec.base * 0.85);
     glassGeometry.setAttribute("baseMask", new THREE.BufferAttribute(baseMask, 1));
+    entry = {
+      glassGeometry,
+      liquidGeometry: new THREE.LatheGeometry(liquidProfile(spec), 40),
+      hitGeometry: new THREE.CylinderGeometry(spec.rTop + 0.12, spec.rBottom + 0.12, spec.height + 0.2, 12)
+    };
+    for (const g of Object.values(entry)) g.userData.cached = true;
+    this.geometryCache.set(key, entry);
+    return entry;
+  }
+
+  buildVessel(shapeName, key, scale = 1) {
+    const spec = scaleSpec(SHAPES[shapeName], scale);
+    const cavity = cavityOf(spec);
+    const group = new THREE.Group();
+    const { glassGeometry, liquidGeometry, hitGeometry } = this.vesselGeometry(shapeName, scale, spec);
     const back = new THREE.Mesh(glassGeometry, this.glassBack);
     back.renderOrder = 2;
     const front = new THREE.Mesh(glassGeometry, this.glassFront);
     front.renderOrder = 4;
-    const liquidMaterial = createLiquidMaterial();
-    const liquid = new THREE.Mesh(new THREE.LatheGeometry(liquidProfile(spec), 40), liquidMaterial);
+    const liquidMaterial = this.liquidPool.pop() ?? createLiquidMaterial();
+    resetUniforms(liquidMaterial);
+    const liquid = new THREE.Mesh(liquidGeometry, liquidMaterial);
     liquid.frustumCulled = false;
-    const hit = new THREE.Mesh(
-      new THREE.CylinderGeometry(spec.rTop + 0.12, spec.rBottom + 0.12, spec.height + 0.2, 12),
-      hiddenMaterial
-    );
+    const hit = new THREE.Mesh(hitGeometry, hiddenMaterial);
     hit.position.y = spec.height / 2;
     group.add(liquid, back, front, hit);
 
@@ -508,7 +543,7 @@ export class MixingBench {
     };
     if (key) {
       srgbColor(pigmentRgb(key), vessel.color);
-      const streamMaterial = createStreamMaterial();
+      const streamMaterial = this.streamPool.pop() ?? createStreamMaterial();
       streamMaterial.color.copy(vessel.color);
       streamMaterial.emissive.copy(vessel.color);
       vessel.stream = new PourStream(this.scene, streamMaterial);
