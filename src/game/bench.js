@@ -962,7 +962,13 @@ export class MixingBench {
     // The goal glass leans towards the player (about x); the cavity is round, so the same solve
     // with that lean gives its level surface.
     const up = this.localUp(v === this.reference ? v.group.rotation.x : v.angle, this.tmp);
-    const c = solveLevel(v.cavity, up, v.volume);
+    const solveAngle = v === this.reference ? v.group.rotation.x : v.angle;
+    if (v.solveVolume !== v.volume || v.solveAngle !== solveAngle) {
+      v.solvedLevel = solveLevel(v.cavity, up, v.volume);
+      v.solveVolume = v.volume;
+      v.solveAngle = solveAngle;
+    }
+    const c = v.solvedLevel;
     const origin = v.group.position;
     const k = v.scale || 1;
     const axial =
