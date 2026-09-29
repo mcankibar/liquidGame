@@ -1,0 +1,387 @@
+#pigment-hud {
+  position: fixed;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+  color: #f4e6cf;
+  font-family: "Avenir Next", "Segoe UI", system-ui, sans-serif;
+}
+
+#pigment-hud .target-card {
+  position: absolute;
+  top: max(14px, env(safe-area-inset-top));
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: min(420px, calc(100% - 28px));
+  box-sizing: border-box;
+  padding: 9px 16px 11px;
+  background: rgba(26, 17, 12, 0.72);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-radius: 22px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45), inset 0 0 0 1px rgba(217, 168, 91, 0.35);
+}
+
+#pigment-hud .target-text {
+  flex: 1;
+  min-width: 0;
+}
+
+#pigment-hud .eyebrow {
+  margin: 0;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #d9a85b;
+}
+
+#pigment-hud h1 {
+  margin: 1px 0 6px;
+  font-size: 1.2rem;
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: 0.01em;
+}
+
+#pigment-hud .meter {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+#pigment-hud .meter-track {
+  position: relative;
+  flex: 1;
+  height: 8px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+}
+
+#pigment-hud .meter-fill {
+  height: 100%;
+  width: 0;
+  border-radius: 99px;
+  background: linear-gradient(90deg, #7b5cff, #ff6ad5);
+  box-shadow: 0 0 10px rgba(255, 106, 213, 0.6);
+  transition: width 0.12s linear;
+}
+
+#pigment-hud .meter-value {
+  min-width: 44px;
+  text-align: right;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+#pigment-hud .hint {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: max(26px, env(safe-area-inset-bottom));
+  margin: 0;
+  text-align: center;
+  font-size: 1rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.95);
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.45);
+  transition: opacity 0.4s;
+}
+
+#pigment-hud .hint.is-hidden {
+  opacity: 0;
+}
+
+#pigment-hud button {
+  pointer-events: auto;
+  border: 0;
+  cursor: pointer;
+  font: 700 1rem/1 "Avenir Next", "Segoe UI", system-ui, sans-serif;
+}
+
+/* Lives inside the target card, clear of the hint text at the bottom of the screen. */
+#pigment-hud .retry-button {
+  flex: none;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
+  color: #f4e6cf;
+  font-size: 1.35rem;
+  box-shadow: inset 0 0 0 1px rgba(217, 168, 91, 0.45);
+}
+
+#pigment-hud .retry-button:active {
+  transform: scale(0.92);
+}
+
+#pigment-hud .target-tag {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: -34px 0 0 -40px;
+  width: 80px;
+  justify-content: center;
+  padding: 5px 0;
+  border-radius: 99px;
+  background: rgba(26, 17, 12, 0.85);
+  color: #f3cf8e;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4), inset 0 0 0 1px rgba(217, 168, 91, 0.5);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  animation: pg-bob 1.6s ease-in-out infinite;
+}
+
+#pigment-hud .target-tag[hidden] {
+  display: none;
+}
+
+#pigment-hud .target-tag span {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  box-shadow: 0 0 8px currentColor;
+}
+
+@keyframes pg-bob {
+  50% {
+    margin-top: -40px;
+  }
+}
+
+#pigment-hud .guide {
+  --hand-size: 96px;
+  --tip-x: -3px;
+  --tip-y: -3px;
+  --press: 1.3s;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 0;
+}
+
+#pigment-hud .guide[hidden] {
+  display: none;
+}
+
+/* The fingertip sits on the glass: the hand fades in in place, presses and lifts; no travel. */
+#pigment-hud .guide-hand {
+  position: absolute;
+  left: var(--tip-x);
+  top: var(--tip-y);
+  width: var(--hand-size);
+  height: auto;
+  transform-origin: calc(var(--tip-x) * -1) calc(var(--tip-y) * -1);
+  filter: drop-shadow(0 8px 10px rgba(0, 0, 0, 0.45));
+  animation: pg-hand-tap var(--press) ease-in-out infinite;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+#pigment-hud .guide.is-hold .guide-hand {
+  animation: pg-hand-hold calc(var(--press) * 2) ease-in-out infinite;
+}
+
+/* Lifted: a little above and larger; pressed: fingertip on the anchor, slightly smaller. */
+@keyframes pg-hand-tap {
+  0% {
+    transform: translateY(-14px) scale(1.06);
+    opacity: 0;
+  }
+  15%,
+  30% {
+    transform: translateY(-14px) scale(1.06);
+    opacity: 1;
+  }
+  45%,
+  55% {
+    transform: translateY(0) scale(0.92);
+    opacity: 1;
+  }
+  75%,
+  88% {
+    transform: translateY(-14px) scale(1.06);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-14px) scale(1.06);
+    opacity: 0;
+  }
+}
+
+@keyframes pg-hand-hold {
+  0% {
+    transform: translateY(-14px) scale(1.06);
+    opacity: 0;
+  }
+  10%,
+  18% {
+    transform: translateY(-14px) scale(1.06);
+    opacity: 1;
+  }
+  28%,
+  78% {
+    transform: translateY(0) scale(0.92);
+    opacity: 1;
+  }
+  90% {
+    transform: translateY(-14px) scale(1.06);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-14px) scale(1.06);
+    opacity: 0;
+  }
+}
+
+#pigment-hud .result {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right))
+    max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+  box-sizing: border-box;
+  background: rgba(20, 14, 10, 0.45);
+  pointer-events: auto;
+  animation: pg-fade 0.3s ease-out;
+}
+
+#pigment-hud .result[hidden] {
+  display: none;
+}
+
+/* Sizes follow the smaller viewport side so the card fits phones, tablets and short landscape screens. */
+#pigment-hud .result-card {
+  --u: min(1vw, 1vh);
+  width: min(340px, 100%);
+  max-height: 100%;
+  overflow-y: auto;
+  padding: clamp(14px, calc(var(--u) * 4.5), 24px) clamp(14px, calc(var(--u) * 4.5), 22px);
+  box-sizing: border-box;
+  text-align: center;
+  background: radial-gradient(circle at 50% 30%, #f6e6c4, #e2c796);
+  color: #3a2410;
+  border-radius: clamp(18px, calc(var(--u) * 5), 26px);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+  animation: pg-pop 0.42s cubic-bezier(0.2, 1.4, 0.4, 1);
+}
+
+#pigment-hud .stars {
+  display: flex;
+  justify-content: center;
+  gap: clamp(4px, calc(var(--u) * 1.6), 8px);
+  padding-top: clamp(4px, calc(var(--u) * 1.6), 8px);
+}
+
+#pigment-hud .stars i {
+  width: clamp(24px, calc(var(--u) * 8), 38px);
+  aspect-ratio: 1;
+  background: #d9c9ad;
+  clip-path: polygon(50% 0, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
+}
+
+#pigment-hud .stars i:nth-child(2) {
+  transform: translateY(-18%) scale(1.18);
+}
+
+#pigment-hud .stars i.is-on {
+  background: linear-gradient(#ffd75e, #f3a712);
+}
+
+#pigment-hud .result-percent {
+  margin: clamp(4px, calc(var(--u) * 2), 10px) 0 0;
+  font-size: clamp(2rem, calc(var(--u) * 11), 3rem);
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+#pigment-hud .result-title {
+  margin: 4px 0 clamp(8px, calc(var(--u) * 3), 16px);
+  font-size: clamp(0.95rem, calc(var(--u) * 4), 1.1rem);
+  font-weight: 600;
+  color: #6f5438;
+}
+
+#pigment-hud .compare {
+  display: flex;
+  justify-content: center;
+  gap: clamp(14px, calc(var(--u) * 5), 22px);
+  margin-bottom: clamp(10px, calc(var(--u) * 3.5), 18px);
+}
+
+#pigment-hud figure {
+  margin: 0;
+}
+
+#pigment-hud figure span {
+  display: block;
+  width: clamp(40px, calc(var(--u) * 12), 58px);
+  aspect-ratio: 1;
+  margin: 0 auto;
+  border-radius: 50%;
+  box-shadow: inset 0 -4px 10px rgba(0, 0, 0, 0.18), 0 4px 10px rgba(0, 0, 0, 0.15);
+}
+
+#pigment-hud figcaption {
+  margin-top: 6px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #7a6246;
+}
+
+#pigment-hud .primary {
+  width: 100%;
+  min-height: 44px;
+  padding: clamp(11px, calc(var(--u) * 3), 15px) 0;
+  border-radius: 16px;
+  background: linear-gradient(#4f8bff, #2f66e0);
+  color: #fff;
+  box-shadow: 0 8px 18px rgba(47, 102, 224, 0.35);
+}
+
+#pigment-hud .result.is-fail .primary {
+  background: linear-gradient(#ff8a5c, #e8603a);
+  box-shadow: 0 8px 18px rgba(232, 96, 58, 0.35);
+}
+
+/* Short landscape screens: score on the left, swatches and button on the right. */
+@media (orientation: landscape) and (max-height: 520px) {
+  #pigment-hud .result-card {
+    width: min(560px, 100%);
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    align-items: center;
+    gap: 16px;
+  }
+
+  #pigment-hud .result-title {
+    margin-bottom: 0;
+  }
+}
+
+@keyframes pg-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes pg-pop {
+  from {
+    transform: scale(0.7);
+    opacity: 0;
+  }
+}
