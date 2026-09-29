@@ -100,14 +100,18 @@ export function mountHud(actions, handImage) {
       match.textContent = percent === null ? "—" : `%${percent}`;
       if (amount > 0.02) hint.classList.add("is-hidden");
     },
+    /** Lowest screen y the goal tag must stay under: the card, unless it sits clear of the centre. */
     cardBottom() {
-      return card.getBoundingClientRect().bottom;
+      const rect = card.getBoundingClientRect();
+      const cx = window.innerWidth / 2;
+      if (rect.right < cx - 80 || rect.left > cx + 80) return Math.max(8, rect.top - 30);
+      return rect.bottom;
     },
     setTag(point) {
       tag.hidden = !point;
       if (!point) return;
       // Never let the bobbing pill ride up onto the target card.
-      const y = Math.max(point.y, card.getBoundingClientRect().bottom + 46);
+      const y = Math.max(point.y, this.cardBottom() + 46);
       tag.style.transform = `translate(${Math.round(point.x)}px, ${Math.round(y)}px)`;
     },
     setGuide(point) {

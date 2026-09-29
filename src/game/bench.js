@@ -1149,7 +1149,9 @@ export class MixingBench {
     const { bottom, side } = margins;
     const rect = this.canvas.getBoundingClientRect();
     // The tag pill is drawn up to ~40px above its anchor, so the anchor sits tagGap px under the card.
-    const safeTop = 1 - (2 * ((this.hooks.safeTop?.() ?? 90) + cfg.goalShelf.tagGap - rect.top)) / rect.height;
+    // The tag gap shrinks on short screens so the HUD does not eat half of the view.
+    const tagGap = Math.min(cfg.goalShelf.tagGap, rect.height * 0.14);
+    const safeTop = 1 - (2 * ((this.hooks.safeTop?.() ?? 90) + tagGap - rect.top)) / rect.height;
     camera.updateProjectionMatrix();
     if (!cam.autoFrame) {
       camera.position.set(cam.position.x, cam.position.y, cam.position.z);
