@@ -193,6 +193,7 @@ export function createLiquidMaterial() {
         if (dot(vLiqWorld, uPlane.xyz) > uPlane.w) discard;
         vec3 liqPos = vLiqWorld;
         float liqWall = 1.0;
+        vec3 liqEdgeNormal = vec3(0.0);
         if (!gl_FrontFacing) {
           vec3 rd = normalize(vLiqWorld - cameraPosition);
           float denom = dot(rd, uPlane.xyz);
@@ -204,12 +205,17 @@ export function createLiquidMaterial() {
           float liqT = clamp(liqLocal.y / uShape.z, 0.0, 1.0);
           float liqR = uShape.x + (uShape.y - uShape.x) * pow(liqT, uShape.w) + uShape2.x * sin(PI * liqT) - uShape2.y;
           if (length(liqLocal.xz) > liqR + 0.004) discard;
-          liqWall = length(vLiqWorld - liqPos);
+          liqWall = max(0.0, liqR - length(liqLocal.xz));
+          // uLocal maps world to vessel; its transpose maps a local normal back to world.
+          vec3 localEdge = vec3(liqLocal.x, 0.0, liqLocal.z);
+          liqEdgeNormal = vec3(dot(uLocal[0].xyz, localEdge), dot(uLocal[1].xyz, localEdge), dot(uLocal[2].xyz, localEdge));
+          liqEdgeNormal /= max(length(liqEdgeNormal), 1e-4);
           vec4 liqClip = projectionMatrix * viewMatrix * vec4(liqPos, 1.0);
           gl_FragDepth = clamp(liqClip.z / liqClip.w * 0.5 + 0.5, 0.0, 1.0);
         } else {
           gl_FragDepth = gl_FragCoord.z;
         }
+        vec3 liqViewPosition = -(viewMatrix * vec4(liqPos, 1.0)).xyz;
         float liqDepth = uPlane.w - dot(liqPos, uPlane.xyz);
         vec2 liqDx = liqPos.xz - uImpact.xz;
         float liqImpactDist = length(liqDx) + 1e-4;
@@ -217,7 +223,7 @@ export function createLiquidMaterial() {
         // centre, which winds the plume into spiral arms.
         vec2 liqRel = liqPos.xz - uAxis;
         float liqAxisDist = length(liqRel);
-        float liqTurn = uSwirlAngle * (0.6 + 1.6 * exp(-liqAxisDist * 7.0));
+        float liqTurn = abs(uSwirlAngle) > 0.002 ? uSwirlAngle * (0.6 + 1.6 * exp(-liqAxisDist * 7.0)) : 0.0;
         float liqC = cos(liqTurn);
         float liqS = sin(liqTurn);
         vec3 liqSwirlPos = vec3(uAxis.x + liqC * liqRel.x - liqS * liqRel.y, liqPos.y, uAxis.y + liqS * liqRel.x + liqC * liqRel.y);
@@ -244,7 +250,7 @@ export function createLiquidMaterial() {
         }
         // Beer-Lambert-ish tint: the chord through the body is longest facing the viewer, and looking
         // down through the surface sees the full depth, so those read deeper and more saturated.
-        float liqFacing = abs(dot(normalize(vNormal), normalize(vViewPosition)));
+        float liqFacing = abs(dot(normalize(vNormal), normalize(liqViewPosition)));
         float liqThick = gl_FrontFacing ? liqFacing * liqFacing : 0.85;
         // Hue-preserving: darken and saturate instead of a per-channel power, which would turn yellow orange.
         float liqLuma = dot(diffuseColor.rgb, vec3(0.2126, 0.7152, 0.0722));
@@ -271,13 +277,19 @@ export function createLiquidMaterial() {
         `#include <normal_fragment_maps>
         if (!gl_FrontFacing) {
           vec3 liqN = uPlane.xyz;
-          float wave = cos(liqImpactDist * 62.0 - uTime * 15.0) * exp(-liqImpactDist * 6.0) * uRipple;
-          liqN.xz += (liqDx / liqImpactDist) * wave * 0.3;
-          vec3 jitterP = vec3(liqPos.xz * 16.0, uTime * 1.6);
-          liqN.xz += (vec2(liqNoise(jitterP), liqNoise(jitterP + 5.3)) - 0.5) * (0.006 + 0.08 * uRipple + 0.12 * liqFoamMask);
-          // Spiral waves while the liquid spins.
-          float liqArm = sin(liqAxisDist * 38.0 - atan(liqRel.y, liqRel.x) * 2.0 - uTime * 7.0);
-          liqN.xz += vec2(-liqRel.y, liqRel.x) / (liqAxisDist + 1e-3) * liqArm * uSwirlRate * 0.05;
+          // A narrow meniscus makes the surface meet the glass instead of ending in a cut edge.
+          liqN -= liqEdgeNormal * (1.0 - smoothstep(0.0, 0.025, liqWall)) * 0.18;
+          if (uRipple > 0.002 || uFoam > 0.002) {
+            float wave = cos(liqImpactDist * 48.0 - uTime * 13.0) * exp(-liqImpactDist * 5.0) * uRipple;
+            float dent = liqImpactDist * exp(-liqImpactDist * liqImpactDist * 180.0) * uInflow * 3.0;
+            liqN.xz += (liqDx / liqImpactDist) * (wave * 0.24 - dent);
+            vec3 jitterP = vec3(liqPos.xz * 16.0, uTime * 1.6);
+            liqN.xz += (vec2(liqNoise(jitterP), liqNoise(jitterP + 5.3)) - 0.5) * (0.06 * uRipple + 0.08 * liqFoamMask);
+          }
+          if (abs(uSwirlRate) > 0.002) {
+            float liqArm = sin(liqAxisDist * 38.0 - atan(liqRel.y, liqRel.x) * 2.0 - uTime * 7.0);
+            liqN.xz += vec2(-liqRel.y, liqRel.x) / (liqAxisDist + 1e-3) * liqArm * uSwirlRate * 0.05;
+          }
           normal = normalize((viewMatrix * vec4(normalize(liqN), 0.0)).xyz);
           nonPerturbedNormal = normal;
         }`
@@ -285,11 +297,12 @@ export function createLiquidMaterial() {
       .replace(
         "#include <emissivemap_fragment>",
         `#include <emissivemap_fragment>
-        float liqNV = saturate(dot(normal, normalize(vViewPosition)));
+        float liqNV = saturate(dot(normal, normalize(liqViewPosition)));
         float liqRim = gl_FrontFacing ? pow(1.0 - liqNV, 2.0) : 0.0;
         float liqPulse = 1.0 + 0.18 * sin(uTime * 1.9 + liqPos.y * 3.0);
         totalEmissiveRadiance += diffuseColor.rgb * uGlow * liqPulse * (0.5 + liqRim);
         // Motes of light drifting up through the potion.
+        if (uSparkle > 0.002) {
         vec3 liqSparkP = liqSwirlPos * 34.0 + vec3(0.0, -uTime * 1.3, 0.0);
         // One round mote per lattice cell at a random spot (thresholded value noise would look square).
         vec3 liqCell = floor(liqSparkP);
@@ -297,7 +310,16 @@ export function createLiquidMaterial() {
         float liqMote = 1.0 - smoothstep(0.0, 0.11, length(fract(liqSparkP) - (0.2 + liqJit * 0.6)));
         float liqSpark = step(0.8, liqHash(liqCell + 1.3)) * liqMote * (0.55 + 0.45 * sin(uTime * 7.0 + liqJit.x * 40.0));
         totalEmissiveRadiance += mix(diffuseColor.rgb, vec3(1.0), 0.55) * liqSpark * uSparkle * (1.0 - liqFoamMask) * 1.6;
+        }
 `
+      )
+      .replace(
+        "#include <lights_fragment_begin>",
+        THREE.ShaderChunk.lights_fragment_begin.replaceAll("vViewPosition", "liqViewPosition")
+      )
+      .replace(
+        "#include <transmission_fragment>",
+        THREE.ShaderChunk.transmission_fragment.replace("vec3 pos = vWorldPosition;", "vec3 pos = liqPos;")
       )
       .replace(
         "#include <opaque_fragment>",
@@ -307,7 +329,7 @@ export function createLiquidMaterial() {
         #include <opaque_fragment>`
       );
   };
-  material.customProgramCacheKey = () => "pigment-liquid";
+  material.customProgramCacheKey = () => "pigment-liquid-surface-v2";
   return material;
 }
 
